@@ -34,4 +34,5 @@ urlpatterns = [
     # Main pages
     path('', RedirectView.as_view(url='/login/', permanent=False), name='home'),
     path('matches/', views.matches_list, name='matches_list'),
+    path('predictions/', views.predictions_view, name='predictions'),
 ]

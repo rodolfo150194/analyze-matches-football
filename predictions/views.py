@@ -486,3 +486,80 @@ def logout_view(request):
         messages.info(request, 'You have been logged out.')
 
     return redirect('predictions:login')
+
+
+# ============================================================================
+# Predictions View
+# ============================================================================
+
+@login_required
+def predictions_view(request):
+    """
+    Display list of predictions for upcoming matches
+    Filters: competition, date range
+    Shows model probabilities, market predictions, and confidence levels
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+
+    # Get filter parameters from GET request
+    competition_code = request.GET.get('competition', '')
+    date_range = request.GET.get('date_range', '7')  # Default: 7 days
+    page = request.GET.get('page', 1)
+
+    # Convert date_range to integer
+    try:
+        days = int(date_range)
+    except ValueError:
+        days = 7  # Default to 7 days
+
+    # Calculate date range
+    start_date = timezone.now()
+    end_date = start_date + timedelta(days=days)
+
+    # Query matches with predictions
+    matches = Match.objects.select_related(
+        'competition', 'home_team', 'away_team'
+    ).prefetch_related(
+        'predictions'  # Prefetch all related predictions
+    ).filter(
+        status__in=['SCHEDULED', 'TIMED'],
+        utc_date__gte=start_date,
+        utc_date__lte=end_date
+    )
+
+    # Filter by competition if selected
+    if competition_code:
+        matches = matches.filter(competition__code=competition_code)
+
+    # Order by date
+    matches = matches.order_by('utc_date')
+
+    # Pagination
+    paginator = Paginator(matches, 25)  # 25 matches per page
+    try:
+        matches_page = paginator.page(page)
+    except PageNotAnInteger:
+        matches_page = paginator.page(1)
+    except EmptyPage:
+        matches_page = paginator.page(paginator.num_pages)
+
+    # Get available competitions for dropdown
+    competitions = Competition.objects.all().order_by('name')
+
+    # Prepare context data
+    context = {
+        'matches': matches_page,
+        'competitions': competitions,
+        'selected_competition': competition_code,
+        'selected_date_range': str(days),
+        'total_matches': paginator.count,
+        'date_range_options': [
+            {'value': '3', 'label': 'Next 3 days'},
+            {'value': '7', 'label': 'Next 7 days'},
+            {'value': '14', 'label': 'Next 14 days'},
+            {'value': '30', 'label': 'Next 30 days'},
+        ]
+    }
+
+    return render(request, 'predictions/predictions.html', context)

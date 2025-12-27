@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictions - Football Analytics</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            /* Stadium Night Palette */
+            --night-sky: #0A1628;
+            --pitch-black: #121826;
+            --electric-green: #00FF87;
+            --floodlight-glow: rgba(0, 255, 135, 0.15);
+            --gray-text: #94A3B8;
+            --white: #FFFFFF;
+            --card-bg: rgba(18, 24, 38, 0.85);
+            --accent-blue: #3B82F6;
+            --warning-amber: #F59E0B;
+            --danger-red: #EF4444;
+            --success-green: #10B981;
+
+            /* Grid */
+            --grid-size: 40px;
+            --grid-color: rgba(255, 255, 255, 0.02);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--night-sky);
+            color: var(--white);
+            min-height: 100vh;
+            position: relative;
+        }
+
+        /* Tactical grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                repeating-linear-gradient(0deg, var(--grid-color) 0px, transparent 1px, transparent var(--grid-size)),
+                repeating-linear-gradient(90deg, var(--grid-color) 0px, transparent 1px, transparent var(--grid-size));
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Floodlight effect */
+        body::after {
+            content: '';
+            position: fixed;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, var(--floodlight-glow) 0%, transparent 70%);
+            top: -400px;
+            right: -400px;
+            pointer-events: none;
+            animation: floodlightPulse 8s ease-in-out infinite;
+            z-index: 0;
+        }
+
+        @keyframes floodlightPulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+
+        .main-container {
+            position: relative;
+            z-index: 1;
+            padding: 0;
+        }
+
+        /* Header */
+        .app-header {
+            background: rgba(18, 24, 38, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 24px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            animation: slideDown 0.6s ease;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .brand-title {
+            font-family: 'Sora', sans-serif;
+            font-weight: 800;
+            font-size: 28px;
+            background: linear-gradient(135deg, var(--white), var(--gray-text));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+        }
+
+        .brand-subtitle {
+            font-size: 14px;
+            color: var(--gray-text);
+            font-weight: 400;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nav-link-custom {
+            color: var(--gray-text);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 10px;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .nav-link-custom:hover {
+            color: var(--electric-green);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-link-custom.active {
+            color: var(--electric-green);
+            background: rgba(0, 255, 135, 0.1);
+        }
+
+        .user-badge {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            color: var(--gray-text);
+        }
+
+        .logout-btn {
+            background: linear-gradient(135deg, var(--electric-green), #00D974);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--pitch-black);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 255, 135, 0.3);
+            color: var(--pitch-black);
+        }
+
+        /* Filter Card */
+        .filter-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 32px;
+            margin: 24px 0;
+            animation: fadeInUp 0.6s ease 0.2s backwards;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .filter-label {
+            font-weight: 500;
+            color: var(--gray-text);
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .form-select {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: var(--white);
+            font-size: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .form-select:focus {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--electric-green);
+            box-shadow: 0 0 0 4px var(--floodlight-glow);
+            color: var(--white);
+            outline: none;
+        }
+
+        .form-select option {
+            background: var(--pitch-black);
+            color: var(--white);
+        }
+
+        .btn-filter {
+            background: linear-gradient(135deg, var(--electric-green), #00D974);
+            border: none;
+            border-radius: 12px;
+            padding: 12px 24px;
+            font-weight: 600;
+            color: var(--pitch-black);
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .btn-filter:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 255, 135, 0.3);
+            color: var(--pitch-black);
+        }
+
+        /* Stats Banner */
+        .stats-banner {
+            background: linear-gradient(135deg, rgba(0, 255, 135, 0.1), rgba(59, 130, 246, 0.1));
+            border: 1px solid rgba(0, 255, 135, 0.2);
+            border-radius: 16px;
+            padding: 16px 24px;
+            margin: 24px 0;
+            text-align: center;
+            color: var(--gray-text);
+            font-size: 14px;
+        }
+
+        /* Prediction Card */
+        .prediction-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 24px;
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.6s ease backwards;
+        }
+
+        .prediction-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(0, 255, 135, 0.1);
+            border-color: rgba(0, 255, 135, 0.2);
+        }
+
+        /* Match Header */
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .match-teams {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 20px;
+            font-weight: 600;
+            font-family: 'Sora', sans-serif;
+        }
+
+        .match-vs {
+            color: var(--gray-text);
+            font-size: 16px;
+            font-weight: 400;
+        }
+
+        .match-meta {
+            text-align: right;
+            color: var(--gray-text);
+            font-size: 13px;
+        }
+
+        .competition-badge {
+            background: rgba(0, 255, 135, 0.1);
+            border: 1px solid rgba(0, 255, 135, 0.3);
+            color: var(--electric-green);
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            display: inline-block;
+            margin-bottom: 4px;
+        }
+
+        /* Section Titles */
+        .section-title {
+            font-family: 'Sora', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--white);
+            margin: 32px 0 16px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .section-title:first-of-type {
+            margin-top: 0;
+        }
+
+        /* Probability Bars */
+        .probability-bars {
+            margin-bottom: 32px;
+        }
+
+        .prob-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .prob-label {
+            width: 60px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--gray-text);
+            text-transform: uppercase;
+        }
+
+        .prob-bar-container {
+            flex: 1;
+            height: 36px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .prob-bar-fill {
+            height: 100%;
+            transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            padding-left: 16px;
+            color: var(--pitch-black);
+            font-weight: 700;
+            font-size: 14px;
+            min-width: 50px;
+        }
+
+        .prob-bar-fill.home {
+            background: linear-gradient(90deg, var(--electric-green), #00D974);
+        }
+
+        .prob-bar-fill.draw {
+            background: linear-gradient(90deg, var(--accent-blue), #60A5FA);
+        }
+
+        .prob-bar-fill.away {
+            background: linear-gradient(90deg, var(--warning-amber), #FBBF24);
+        }
+
+        .prob-percent {
+            width: 60px;
+            text-align: right;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--white);
+        }
+
+        /* Market Predictions Grid */
+        .markets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .market-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .market-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateY(-2px);
+        }
+
+        .market-label {
+            font-size: 11px;
+            color: var(--gray-text);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+
+        .market-value {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--electric-green);
+            font-family: 'Sora', sans-serif;
+            margin-bottom: 4px;
+        }
+
+        .market-subnote {
+            font-size: 11px;
+            color: var(--gray-text);
+            margin-top: 6px;
+        }
+
+        /* Exact Predictions */
+        .exact-predictions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .exact-item {
+            text-align: center;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+        }
+
+        .exact-label {
+            font-size: 11px;
+            color: var(--gray-text);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .exact-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--white);
+            font-family: 'Sora', sans-serif;
+        }
+
+        /* Confidence Badge */
+        .confidence-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--electric-green);
+            border: 1px solid var(--electric-green);
+        }
+
+        .badge-info {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent-blue);
+            border: 1px solid var(--accent-blue);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning-amber);
+            border: 1px solid var(--warning-amber);
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger-red);
+            border: 1px solid var(--danger-red);
+        }
+
+        /* Model Info Footer */
+        .model-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .model-version {
+            font-size: 12px;
+            color: var(--gray-text);
+        }
+
+        /* No Prediction State */
+        .no-prediction {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray-text);
+        }
+
+        .no-prediction-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 100px 20px;
+            color: var(--gray-text);
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .empty-state-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--white);
+            font-family: 'Sora', sans-serif;
+        }
+
+        /* Pagination */
+        .pagination-container {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 32px 0;
+        }
+
+        .page-link-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--gray-text);
+            padding: 10px 16px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .page-link-custom:hover {
+            background: rgba(0, 255, 135, 0.1);
+            border-color: var(--electric-green);
+            color: var(--electric-green);
+        }
+
+        .page-link-custom.active {
+            background: linear-gradient(135deg, var(--electric-green), #00D974);
+            border-color: var(--electric-green);
+            color: var(--pitch-black);
+        }
+
+        .page-link-custom.disabled {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .brand-title {
+                font-size: 20px;
+            }
+
+            .match-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .match-teams {
+                font-size: 18px;
+                flex-wrap: wrap;
+            }
+
+            .match-meta {
+                text-align: left;
+            }
+
+            .prediction-card {
+                padding: 24px;
+            }
+
+            .prob-label {
+                width: 50px;
+                font-size: 12px;
+            }
+
+            .markets-grid {
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            }
+
+            .user-menu {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="container">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1 class="brand-title">⚽ Football Analytics</h1>
+                        <p class="brand-subtitle">ML Model Predictions</p>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="user-menu justify-content-end">
+                            <a href="{% url 'predictions:matches_list' %}" class="nav-link-custom">Matches</a>
+                            <a href="{% url 'predictions:predictions' %}" class="nav-link-custom active">Predictions</a>
+                            <span class="user-badge">{{ user.username }}</span>
+                            <a href="{% url 'predictions:logout' %}" class="logout-btn">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="container" style="padding-top: 24px; padding-bottom: 60px;">
+            <!-- Filters -->
+            <div class="filter-card">
+                <form method="get" class="row g-3">
+                    <div class="col-md-5">
+                        <label class="filter-label">Competition</label>
+                        <select name="competition" class="form-select">
+                            <option value="">All Competitions</option>
+                            {% for comp in competitions %}
+                            <option value="{{ comp.code }}" {% if comp.code == selected_competition %}selected{% endif %}>
+                                {{ comp.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="filter-label">Date Range</label>
+                        <select name="date_range" class="form-select">
+                            {% for option in date_range_options %}
+                            <option value="{{ option.value }}" {% if option.value == selected_date_range %}selected{% endif %}>
+                                {{ option.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="filter-label">&nbsp;</label>
+                        <button type="submit" class="btn btn-filter">Apply</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Stats Banner -->
+            <div class="stats-banner">
+                Showing predictions for <strong style="color: var(--electric-green);">{{ total_matches }}</strong> upcoming matches
+            </div>
+
+            <!-- Predictions List -->
+            {% if matches %}
+                {% for match in matches %}
+                    {% with prediction=match.predictions.first %}
+                    <div class="prediction-card" style="animation-delay: 0.{{ forloop.counter }}s;">
+                        <!-- Match Header -->
+                        <div class="match-header">
+                            <div class="match-teams">
+                                <span>{{ match.home_team.name }}</span>
+                                <span class="match-vs">vs</span>
+                                <span>{{ match.away_team.name }}</span>
+                            </div>
+                            <div class="match-meta">
+                                <span class="competition-badge">{{ match.competition.code }}</span>
+                                <div style="margin-top: 8px;">{{ match.utc_date|date:"d M Y, H:i" }}</div>
+                            </div>
+                        </div>
+
+                        {% if prediction %}
+                            <!-- Result Probabilities -->
+                            <div class="section-title">Match Result Prediction</div>
+                            <div class="probability-bars">
+                                <!-- Home Win -->
+                                <div class="prob-row">
+                                    <div class="prob-label">HOME</div>
+                                    <div class="prob-bar-container">
+                                        <div class="prob-bar-fill home" style="width: {% widthratio prediction.prob_home 1 100 %}%;">
+                                            {% widthratio prediction.prob_home 1 100 %}%
+                                        </div>
+                                    </div>
+                                    <div class="prob-percent">{% widthratio prediction.prob_home 1 100 %}%</div>
+                                </div>
+
+                                <!-- Draw -->
+                                <div class="prob-row">
+                                    <div class="prob-label">DRAW</div>
+                                    <div class="prob-bar-container">
+                                        <div class="prob-bar-fill draw" style="width: {% widthratio prediction.prob_draw 1 100 %}%;">
+                                            {% widthratio prediction.prob_draw 1 100 %}%
+                                        </div>
+                                    </div>
+                                    <div class="prob-percent">{% widthratio prediction.prob_draw 1 100 %}%</div>
+                                </div>
+
+                                <!-- Away Win -->
+                                <div class="prob-row">
+                                    <div class="prob-label">AWAY</div>
+                                    <div class="prob-bar-container">
+                                        <div class="prob-bar-fill away" style="width: {% widthratio prediction.prob_away 1 100 %}%;">
+                                            {% widthratio prediction.prob_away 1 100 %}%
+                                        </div>
+                                    </div>
+                                    <div class="prob-percent">{% widthratio prediction.prob_away 1 100 %}%</div>
+                                </div>
+                            </div>
+
+                            <!-- Market Predictions -->
+                            {% if prediction.prob_over_25 or prediction.prob_btts or prediction.prob_over_95_corners or prediction.prob_over_105_corners %}
+                            <div class="section-title">Market Predictions</div>
+                            <div class="markets-grid">
+                                {% if prediction.prob_over_25 %}
+                                <div class="market-card">
+                                    <div class="market-label">Over 2.5 Goals</div>
+                                    <div class="market-value">{% widthratio prediction.prob_over_25 1 100 %}%</div>
+                                    <div class="market-subnote">55.5% accuracy</div>
+                                </div>
+                                {% endif %}
+
+                                {% if prediction.prob_btts %}
+                                <div class="market-card">
+                                    <div class="market-label">BTTS</div>
+                                    <div class="market-value">{% widthratio prediction.prob_btts 1 100 %}%</div>
+                                    <div class="market-subnote">53.6% accuracy</div>
+                                </div>
+                                {% endif %}
+
+                                {% if prediction.prob_over_105_corners %}
+                                <div class="market-card">
+                                    <div class="market-label">Over 10.5 Corners</div>
+                                    <div class="market-value">{% widthratio prediction.prob_over_105_corners 1 100 %}%</div>
+                                    <div class="market-subnote">61.6% accuracy ⭐</div>
+                                </div>
+                                {% endif %}
+
+                                {% if prediction.prob_over_95_corners %}
+                                <div class="market-card">
+                                    <div class="market-label">Over 9.5 Corners</div>
+                                    <div class="market-value">{% widthratio prediction.prob_over_95_corners 1 100 %}%</div>
+                                    <div class="market-subnote">50.3% accuracy</div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+
+                            <!-- Exact Predictions -->
+                            {% if prediction.predicted_corners or prediction.predicted_shots or prediction.predicted_shots_on_target %}
+                            <div class="section-title">Exact Predictions</div>
+                            <div class="exact-predictions">
+                                {% if prediction.predicted_corners %}
+                                <div class="exact-item">
+                                    <div class="exact-label">Total Corners</div>
+                                    <div class="exact-value">{{ prediction.predicted_corners|floatformat:1 }}</div>
+                                </div>
+                                {% endif %}
+
+                                {% if prediction.predicted_shots %}
+                                <div class="exact-item">
+                                    <div class="exact-label">Total Shots</div>
+                                    <div class="exact-value">{{ prediction.predicted_shots|floatformat:1 }}</div>
+                                </div>
+                                {% endif %}
+
+                                {% if prediction.predicted_shots_on_target %}
+                                <div class="exact-item">
+                                    <div class="exact-label">Shots on Target</div>
+                                    <div class="exact-value">{{ prediction.predicted_shots_on_target|floatformat:1 }}</div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+
+                            <!-- Model Info & Confidence -->
+                            <div class="model-footer">
+                                <div class="model-version">
+                                    {% if prediction.model_version %}
+                                        Model: {{ prediction.model_version }} • Generated: {{ prediction.created_at|date:"d M Y, H:i" }}
+                                    {% else %}
+                                        Generated: {{ prediction.created_at|date:"d M Y, H:i" }}
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {% widthratio prediction.prob_home 1 100 as prob_home_int %}
+                                    {% widthratio prediction.prob_draw 1 100 as prob_draw_int %}
+                                    {% widthratio prediction.prob_away 1 100 as prob_away_int %}
+
+                                    {% if prob_home_int >= 65 or prob_draw_int >= 65 or prob_away_int >= 65 %}
+                                        <span class="confidence-badge badge-success">Confidence: Very High</span>
+                                    {% elif prob_home_int >= 55 or prob_draw_int >= 55 or prob_away_int >= 55 %}
+                                        <span class="confidence-badge badge-info">Confidence: High</span>
+                                    {% elif prob_home_int >= 45 or prob_draw_int >= 45 or prob_away_int >= 45 %}
+                                        <span class="confidence-badge badge-warning">Confidence: Medium</span>
+                                    {% else %}
+                                        <span class="confidence-badge badge-danger">Confidence: Low</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                        {% else %}
+                            <!-- No Prediction Available -->
+                            <div class="no-prediction">
+                                <div class="no-prediction-icon">⚠️</div>
+                                <p style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">No prediction available yet for this match</p>
+                                <small>Predictions are generated closer to match time when sufficient data is available.</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% endwith %}
+                {% endfor %}
+
+                <!-- Pagination -->
+                {% if matches.has_other_pages %}
+                <div class="pagination-container">
+                    {% if matches.has_previous %}
+                        <a href="?page=1&competition={{ selected_competition }}&date_range={{ selected_date_range }}" class="page-link-custom">First</a>
+                        <a href="?page={{ matches.previous_page_number }}&competition={{ selected_competition }}&date_range={{ selected_date_range }}" class="page-link-custom">Prev</a>
+                    {% else %}
+                        <span class="page-link-custom disabled">First</span>
+                        <span class="page-link-custom disabled">Prev</span>
+                    {% endif %}
+
+                    <span class="page-link-custom active">Page {{ matches.number }} of {{ matches.paginator.num_pages }}</span>
+
+                    {% if matches.has_next %}
+                        <a href="?page={{ matches.next_page_number }}&competition={{ selected_competition }}&date_range={{ selected_date_range }}" class="page-link-custom">Next</a>
+                        <a href="?page={{ matches.paginator.num_pages }}&competition={{ selected_competition }}&date_range={{ selected_date_range }}" class="page-link-custom">Last</a>
+                    {% else %}
+                        <span class="page-link-custom disabled">Next</span>
+                        <span class="page-link-custom disabled">Last</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+            {% else %}
+                <!-- Empty State -->
+                <div class="empty-state">
+                    <div class="empty-state-icon">⚽</div>
+                    <div class="empty-state-title">No Upcoming Matches</div>
+                    <p>No matches found for the selected filters. Try adjusting your date range or competition.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

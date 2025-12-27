@@ -155,6 +155,38 @@
             color: var(--pitch-black);
         }
 
+        .nav-link-custom {
+            color: var(--gray-text);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .nav-link-custom:hover {
+            color: var(--electric-green);
+            background: rgba(0, 255, 135, 0.05);
+        }
+
+        .nav-link-custom.active {
+            color: var(--electric-green);
+            background: rgba(0, 255, 135, 0.1);
+        }
+
+        .nav-link-custom.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 16px;
+            right: 16px;
+            height: 2px;
+            background: var(--electric-green);
+            border-radius: 2px;
+        }
+
         /* Filter Card */
         .filter-card {
             background: var(--card-bg);
@@ -600,7 +632,9 @@
                         <p class="brand-subtitle">Professional Match Predictions & Statistics</p>
                     </div>
                     <div class="col-md-4">
-                        <div class="user-menu">
+                        <div class="user-menu justify-content-end">
+                            <a href="{% url 'predictions:matches_list' %}" class="nav-link-custom active">Matches</a>
+                            <a href="{% url 'predictions:predictions' %}" class="nav-link-custom">Predictions</a>
                             <span class="user-badge">👤 {{ user.username }}</span>
                             <a href="{% url 'predictions:logout' %}" class="logout-btn">Logout</a>
                         </div>
