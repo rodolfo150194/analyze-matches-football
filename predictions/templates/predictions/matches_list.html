@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partidos - Football Django</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .filters {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .filters form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            align-items: end;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 0.9em;
+        }
+
+        .filter-group select {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1em;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .filter-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .stats-bar {
+            padding: 20px 30px;
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stats-bar .count {
+            font-size: 1.1em;
+            color: #666;
+        }
+
+        .stats-bar .count strong {
+            color: #667eea;
+            font-size: 1.3em;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0;
+        }
+
+        .content-grid.has-extras {
+            grid-template-columns: 350px 1fr;
+        }
+
+        .sidebar {
+            background: #f8f9fa;
+            border-right: 1px solid #e0e0e0;
+            max-height: 800px;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .sidebar-section h3 {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            padding: 0 30px 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th {
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        th.center {
+            text-align: center;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #e0e0e0;
+            transition: all 0.2s;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        tbody tr.clickable {
+            cursor: pointer;
+        }
+
+        tbody tr.clickable:hover {
+            background: #e3f2fd;
+        }
+
+        td {
+            padding: 12px 10px;
+            color: #333;
+            font-size: 0.9em;
+        }
+
+        td.center {
+            text-align: center;
+        }
+
+        .standings-table {
+            font-size: 0.85em;
+            margin-top: 10px;
+        }
+
+        .standings-table th,
+        .standings-table td {
+            padding: 8px 6px;
+            font-size: 0.85em;
+        }
+
+        .standings-table .pos {
+            font-weight: bold;
+            color: #667eea;
+            text-align: center;
+            width: 35px;
+        }
+
+        .standings-table .team-name {
+            font-weight: 500;
+            cursor: pointer;
+            color: #667eea;
+            text-decoration: underline;
+        }
+
+        .standings-table .team-name:hover {
+            color: #5568d3;
+        }
+
+        .standings-table .number {
+            text-align: center;
+            width: 40px;
+        }
+
+        .players-table {
+            font-size: 0.85em;
+            margin-top: 10px;
+        }
+
+        .players-table th,
+        .players-table td {
+            padding: 8px 6px;
+            font-size: 0.85em;
+        }
+
+        .players-table tbody tr {
+            cursor: pointer;
+        }
+
+        .players-table tbody tr:hover {
+            background: #e3f2fd;
+        }
+
+        .competition-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .status-FINISHED {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .status-SCHEDULED {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .status-IN_PLAY {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+
+        .score {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .team-name {
+            font-weight: 500;
+        }
+
+        .match-date {
+            color: #666;
+            font-size: 0.85em;
+        }
+
+        .stats-row {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .stats-row span {
+            margin-right: 10px;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .pagination a,
+        .pagination span {
+            padding: 8px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #667eea;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .pagination a:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .pagination .current {
+            background: #667eea;
+            color: white;
+        }
+
+        .pagination .disabled {
+            color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .no-results svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 0;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .player-info, .match-info, .team-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .info-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .info-card .label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .info-card .value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .stat-item .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-item .stat-label {
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        /* Tab styles */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            position: relative;
+            bottom: -2px;
+        }
+
+        .tab:hover {
+            color: #667eea;
+            background: #f8f9fa;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .match-score-large {
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .match-score-large .teams {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        .match-score-large .score-display {
+            font-size: 3em;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+
+        @media (max-width: 1024px) {
+            .content-grid.has-extras {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                max-height: none;
+                border-right: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .filters form {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 0.85em;
+            }
+
+            th, td {
+                padding: 8px 6px;
+            }
+
+            .stats-row {
+                display: none;
+            }
+
+            .modal-content {
+                width: 95%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚽ Partidos de Fútbol</h1>
+            <p>Base de datos de partidos importados desde SofaScore</p>
+        </div>
+
+        <div class="filters">
+            <form method="get">
+                <div class="filter-group">
+                    <label for="competition">Competición</label>
+                    <select name="competition" id="competition">
+                        <option value="">Todas las competiciones</option>
+                        {% for comp in competitions %}
+                        <option value="{{ comp.code }}" {% if comp.code == selected_competition %}selected{% endif %}>
+                            {{ comp.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="season">Temporada</label>
+                    <select name="season" id="season">
+                        <option value="">Todas las temporadas</option>
+                        {% for s in available_seasons %}
+                        <option value="{{ s }}" {% if s|stringformat:"s" == selected_season %}selected{% endif %}>
+                            {{ s }}/{{ s|add:1 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="status">Estado</label>
+                    <select name="status" id="status">
+                        <option value="">Todos los estados</option>
+                        {% for status_code, status_name in status_choices %}
+                        <option value="{{ status_code }}" {% if status_code == selected_status %}selected{% endif %}>
+                            {{ status_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <button type="submit" class="btn btn-primary">🔍 Filtrar</button>
+                </div>
+
+                <div class="filter-group">
+                    <a href="{% url 'predictions:matches_list' %}" class="btn btn-secondary">🔄 Limpiar</a>
+                </div>
+            </form>
+        </div>
+
+        <div class="stats-bar">
+            <div class="count">
+                Mostrando <strong>{{ total_matches }}</strong> partidos
+            </div>
+        </div>
+
+        <div class="content-grid {% if show_additional_tables %}has-extras{% endif %}">
+            {% if show_additional_tables %}
+            <div class="sidebar">
+                <!-- Standings Table -->
+                {% if standings %}
+                <div class="sidebar-section">
+                    <h3>🏆 Clasificación</h3>
+                    <table class="standings-table">
+                        <thead>
+                            <tr>
+                                <th class="pos">#</th>
+                                <th>Equipo</th>
+                                <th class="number">PJ</th>
+                                <th class="number">Pts</th>
+                                <th class="number">DG</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for team in standings %}
+                            <tr>
+                                <td class="pos">{{ team.position }}</td>
+                                <td class="team-name" onclick="showTeamModal('{{ team.team_id }}')">{{ team.team.short_name }}</td>
+                                <td class="number">{{ team.played }}</td>
+                                <td class="number"><strong>{{ team.points }}</strong></td>
+                                <td class="number">{{ team.goal_difference|stringformat:"+d" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                <!-- Players Table -->
+                {% if players %}
+                <div class="sidebar-section">
+                    <h3>⭐ Mejores Jugadores</h3>
+                    <table class="players-table">
+                        <thead>
+                            <tr>
+                                <th>Jugador</th>
+                                <th class="number">G</th>
+                                <th class="number">A</th>
+                                <th class="number">xG</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for player_stat in players %}
+                            <tr onclick="showPlayerModal('{{ player_stat.id }}')">
+                                <td>
+                                    <div style="font-weight: 500;">{{ player_stat.player.short_name }}</div>
+                                    <div style="font-size: 0.8em; color: #666;">{{ player_stat.team.short_name }}</div>
+                                </td>
+                                <td class="number">{{ player_stat.goals }}</td>
+                                <td class="number">{{ player_stat.assists }}</td>
+                                <td class="number">{{ player_stat.xg|floatformat:1 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="table-container">
+                {% if matches %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Competición</th>
+                            <th>Fecha</th>
+                            <th>Equipo Local</th>
+                            <th class="center">Resultado</th>
+                            <th>Equipo Visitante</th>
+                            <th class="center">Estado</th>
+                            <th class="center">Estadísticas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for match in matches %}
+                        <tr class="clickable" onclick="showMatchModal('{{ match.id }}')">
+                            <td>
+                                <span class="competition-badge">{{ match.competition.code }}</span>
+                            </td>
+                            <td>
+                                <div class="match-date">
+                                    {{ match.utc_date|date:"d/m/Y" }}<br>
+                                    <small>{{ match.utc_date|date:"H:i" }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="team-name">{{ match.home_team.name }}</div>
+                            </td>
+                            <td class="center">
+                                {% if match.status == 'FINISHED' %}
+                                    <div class="score">{{ match.home_score }} - {{ match.away_score }}</div>
+                                    {% if match.home_score_ht is not None %}
+                                    <small style="color: #999;">({{ match.home_score_ht }}-{{ match.away_score_ht }})</small>
+                                    {% endif %}
+                                {% else %}
+                                    <span style="color: #999;">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="team-name">{{ match.away_team.name }}</div>
+                            </td>
+                            <td class="center">
+                                <span class="status-badge status-{{ match.status }}">
+                                    {{ match.get_status_display }}
+                                </span>
+                            </td>
+                            <td class="center">
+                                {% if match.shots_home is not None %}
+                                    <div class="stats-row">
+                                        <span title="Tiros">🎯 {{ match.shots_home }}-{{ match.shots_away }}</span>
+                                        <span title="Corners">🚩 {{ match.corners_home|default:"-" }}-{{ match.corners_away|default:"-" }}</span>
+                                        {% if match.possession_home %}
+                                        <span title="Posesión">⚪ {{ match.possession_home }}%-{{ match.possession_away }}%</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if match.xg_home %}
+                                    <div class="stats-row">
+                                        <span title="Expected Goals">xG {{ match.xg_home|floatformat:2 }}-{{ match.xg_away|floatformat:2 }}</span>
+                                    </div>
+                                    {% endif %}
+                                {% else %}
+                                    <span style="color: #ccc;">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <!-- Pagination -->
+                {% if matches.has_other_pages %}
+                <div class="pagination">
+                    {% if matches.has_previous %}
+                        <a href="?page=1{% if selected_competition %}&competition={{ selected_competition }}{% endif %}{% if selected_season %}&season={{ selected_season }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">« Primera</a>
+                        <a href="?page={{ matches.previous_page_number }}{% if selected_competition %}&competition={{ selected_competition }}{% endif %}{% if selected_season %}&season={{ selected_season }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">‹ Anterior</a>
+                    {% else %}
+                        <span class="disabled">« Primera</span>
+                        <span class="disabled">‹ Anterior</span>
+                    {% endif %}
+
+                    <span class="current">
+                        Página {{ matches.number }} de {{ matches.paginator.num_pages }}
+                    </span>
+
+                    {% if matches.has_next %}
+                        <a href="?page={{ matches.next_page_number }}{% if selected_competition %}&competition={{ selected_competition }}{% endif %}{% if selected_season %}&season={{ selected_season }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Siguiente ›</a>
+                        <a href="?page={{ matches.paginator.num_pages }}{% if selected_competition %}&competition={{ selected_competition }}{% endif %}{% if selected_season %}&season={{ selected_season }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Última »</a>
+                    {% else %}
+                        <span class="disabled">Siguiente ›</span>
+                        <span class="disabled">Última »</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% else %}
+                <div class="no-results">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3>No se encontraron partidos</h3>
+                    <p>Intenta con otros filtros o importa más datos.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Match Stats Modal -->
+    <div id="matchModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalMatchTitle">Estadísticas del Partido</h2>
+                <button class="close" onclick="closeMatchModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalMatchBody">
+                <p style="text-align: center; color: #999;">Cargando...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Stats Modal -->
+    <div id="teamModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTeamTitle">Estadísticas del Equipo</h2>
+                <button class="close" onclick="closeTeamModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalTeamBody">
+                <p style="text-align: center; color: #999;">Cargando...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player Stats Modal -->
+    <div id="playerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalPlayerName">Estadísticas del Jugador</h2>
+                <button class="close" onclick="closePlayerModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalPlayerBody">
+                <p style="text-align: center; color: #999;">Cargando...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize data with error handling
+        let matchesData = {};
+        let teamsData = {};
+        let playerStatsData = {};
+
+        try {
+            // Match data from Django (JSON serialized)
+            matchesData = {{ matches_data_json|safe }};
+
+            // Team stats data from Django (JSON serialized)
+            teamsData = {{ teams_data_json|safe }};
+
+            // Player stats data from Django (JSON serialized)
+            playerStatsData = {{ players_data_json|safe }};
+
+            // Debug: Log data to console
+            console.log('Matches loaded:', Object.keys(matchesData).length);
+            console.log('Teams loaded:', Object.keys(teamsData).length);
+            console.log('Players loaded:', Object.keys(playerStatsData).length);
+        } catch (error) {
+            console.error('Error loading data:', error);
+            console.log('matches_data_json:', '{{ matches_data_json|escapejs }}');
+            console.log('teams_data_json:', '{{ teams_data_json|escapejs }}');
+            console.log('players_data_json:', '{{ players_data_json|escapejs }}');
+        }
+
+        function showMatchModal(matchId) {
+            const modal = document.getElementById('matchModal');
+            const modalTitle = document.getElementById('modalMatchTitle');
+            const modalBody = document.getElementById('modalMatchBody');
+
+            const match = matchesData[matchId];
+            if (!match) return;
+
+            modalTitle.textContent = `${match.homeTeam} vs ${match.awayTeam}`;
+
+            let scoreHtml = '';
+            if (match.homeScore !== null && match.awayScore !== null) {
+                scoreHtml = `
+                    <div class="match-score-large">
+                        <div class="teams">
+                            <span>${match.homeTeam}</span>
+                            <span>vs</span>
+                            <span>${match.awayTeam}</span>
+                        </div>
+                        <div class="score-display">${match.homeScore} - ${match.awayScore}</div>
+                        ${match.homeScoreHT !== null ? `<div>Medio Tiempo: ${match.homeScoreHT} - ${match.awayScoreHT}</div>` : ''}
+                        <div style="margin-top: 10px; font-size: 0.9em;">${match.date} | ${match.competition}</div>
+                    </div>
+                `;
+            } else {
+                scoreHtml = `
+                    <div class="match-info">
+                        <div class="info-card">
+                            <div class="label">Competición</div>
+                            <div class="value">${match.competition}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="label">Fecha</div>
+                            <div class="value">${match.date}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="label">Estado</div>
+                            <div class="value">${match.status}</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            let statsHtml = '';
+            if (match.shots.home !== null || match.possession.home !== null) {
+                statsHtml = `
+                    <h3 style="margin: 20px 0 15px 0; color: #333;">Estadísticas del Partido</h3>
+                    <div class="stats-grid">
+                        ${match.shots.home !== null ? `
+                        <div class="stat-item">
+                            <div class="stat-value">${match.shots.home} - ${match.shots.away}</div>
+                            <div class="stat-label">Tiros</div>
+                        </div>
+                        ` : ''}
+                        ${match.shotsOnTarget.home !== null ? `
+                        <div class="stat-item">
+                            <div class="stat-value">${match.shotsOnTarget.home} - ${match.shotsOnTarget.away}</div>
+                            <div class="stat-label">Tiros a puerta</div>
+                        </div>
+                        ` : ''}
+                        ${match.corners.home !== null ? `
+                        <div class="stat-item">
+                            <div class="stat-value">${match.corners.home} - ${match.corners.away}</div>
+                            <div class="stat-label">Corners</div>
+                        </div>
+                        ` : ''}
+                        ${match.possession.home !== null ? `
+                        <div class="stat-item">
+                            <div class="stat-value">${match.possession.home}% - ${match.possession.away}%</div>
+                            <div class="stat-label">Posesión</div>
+                        </div>
+                        ` : ''}
+                        ${match.xg.home !== null ? `
+                        <div class="stat-item">
+                            <div class="stat-value">${match.xg.home.toFixed(2)} - ${match.xg.away.toFixed(2)}</div>
+                            <div class="stat-label">Expected Goals (xG)</div>
+                        </div>
+                        ` : ''}
+                        ${match.fouls.home !== null ? `
+                        <div class="stat-item">
+                            <div class="stat-value">${match.fouls.home} - ${match.fouls.away}</div>
+                            <div class="stat-label">Faltas</div>
+                        </div>
+                        ` : ''}
+                        ${match.yellowCards.home !== null ? `
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: #ffa726;">${match.yellowCards.home} - ${match.yellowCards.away}</div>
+                            <div class="stat-label">Tarjetas Amarillas</div>
+                        </div>
+                        ` : ''}
+                        ${match.redCards.home !== null && (match.redCards.home > 0 || match.redCards.away > 0) ? `
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: #e53935;">${match.redCards.home} - ${match.redCards.away}</div>
+                            <div class="stat-label">Tarjetas Rojas</div>
+                        </div>
+                        ` : ''}
+                        ${match.offsides.home !== null ? `
+                        <div class="stat-item">
+                            <div class="stat-value">${match.offsides.home} - ${match.offsides.away}</div>
+                            <div class="stat-label">Fuera de juego</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            } else {
+                statsHtml = '<p style="text-align: center; color: #999; padding: 20px;">No hay estadísticas disponibles para este partido.</p>';
+            }
+
+            // Tabs section with H2H, Home Recent, Away Recent
+            let tabsHtml = `
+                <h3 style="margin: 30px 0 15px 0; color: #333;">Historial de Partidos</h3>
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab(event, 'h2h-${matchId}')">Enfrentamientos Directos</button>
+                    <button class="tab" onclick="switchTab(event, 'home-${matchId}')">Recientes ${match.homeTeamShort}</button>
+                    <button class="tab" onclick="switchTab(event, 'away-${matchId}')">Recientes ${match.awayTeamShort}</button>
+                </div>
+            `;
+
+            // Head-to-head tab content
+            let h2hContent = '';
+            if (match.headToHead && match.headToHead.length > 0) {
+                let homeWins = 0, awayWins = 0, draws = 0;
+                match.headToHead.forEach(h2h => {
+                    const isHomeTeamInH2H = h2h.homeTeam === match.homeTeamShort;
+                    if (h2h.homeScore > h2h.awayScore) {
+                        if (isHomeTeamInH2H) homeWins++;
+                        else awayWins++;
+                    } else if (h2h.homeScore < h2h.awayScore) {
+                        if (isHomeTeamInH2H) awayWins++;
+                        else homeWins++;
+                    } else {
+                        draws++;
+                    }
+                });
+
+                h2hContent = `
+                    <div class="stats-grid" style="margin-bottom: 20px;">
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: #4caf50;">${homeWins}</div>
+                            <div class="stat-label">Victorias ${match.homeTeamShort}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: #ffa726;">${draws}</div>
+                            <div class="stat-label">Empates</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: #667eea;">${awayWins}</div>
+                            <div class="stat-label">Victorias ${match.awayTeamShort}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${match.headToHead.length}</div>
+                            <div class="stat-label">Partidos Totales</div>
+                        </div>
+                    </div>
+                    ${renderMatchesTable(match.headToHead, match.homeTeamShort, match.awayTeamShort)}
+                `;
+            } else {
+                h2hContent = '<p style="text-align: center; color: #999; padding: 20px;">No hay enfrentamientos previos entre estos equipos.</p>';
+            }
+
+            // Home recent tab content
+            let homeRecentContent = '';
+            if (match.homeRecent && match.homeRecent.length > 0) {
+                homeRecentContent = renderMatchesTable(match.homeRecent, match.homeTeamShort, null);
+            } else {
+                homeRecentContent = '<p style="text-align: center; color: #999; padding: 20px;">No hay partidos recientes disponibles.</p>';
+            }
+
+            // Away recent tab content
+            let awayRecentContent = '';
+            if (match.awayRecent && match.awayRecent.length > 0) {
+                awayRecentContent = renderMatchesTable(match.awayRecent, match.awayTeamShort, null);
+            } else {
+                awayRecentContent = '<p style="text-align: center; color: #999; padding: 20px;">No hay partidos recientes disponibles.</p>';
+            }
+
+            const tabContents = `
+                <div id="h2h-${matchId}" class="tab-content active">
+                    ${h2hContent}
+                </div>
+                <div id="home-${matchId}" class="tab-content">
+                    ${homeRecentContent}
+                </div>
+                <div id="away-${matchId}" class="tab-content">
+                    ${awayRecentContent}
+                </div>
+            `;
+
+            modalBody.innerHTML = scoreHtml + statsHtml + tabsHtml + tabContents;
+            modal.classList.add('active');
+        }
+
+        function renderMatchesTable(matches, highlightTeam, opposingTeam) {
+            return `
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; font-size: 0.9em; border-collapse: collapse;">
+                        <thead style="background: #f8f9fa; color: #333;">
+                            <tr>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e0e0e0;">Fecha</th>
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #e0e0e0;">Comp.</th>
+                                <th style="padding: 10px; text-align: right; border-bottom: 2px solid #e0e0e0;">Local</th>
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #e0e0e0;">Resultado</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e0e0e0;">Visitante</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${matches.map(m => {
+                                const isHomeWin = m.homeScore > m.awayScore;
+                                const isAwayWin = m.homeScore < m.awayScore;
+                                const isDraw = m.homeScore === m.awayScore;
+
+                                let resultColor = '#ffa726'; // draw
+                                if (highlightTeam) {
+                                    const isHighlightedTeamHome = m.homeTeam === highlightTeam;
+                                    if (isHomeWin) resultColor = isHighlightedTeamHome ? '#4caf50' : '#e53935';
+                                    if (isAwayWin) resultColor = isHighlightedTeamHome ? '#e53935' : '#4caf50';
+                                }
+
+                                const homeIsBold = m.homeTeam === highlightTeam || (opposingTeam && m.homeTeam === opposingTeam);
+                                const awayIsBold = m.awayTeam === highlightTeam || (opposingTeam && m.awayTeam === opposingTeam);
+
+                                return `
+                                    <tr style="border-bottom: 1px solid #e0e0e0;">
+                                        <td style="padding: 10px;">${m.date}</td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <span style="padding: 2px 8px; background: #e3f2fd; border-radius: 4px; font-size: 0.85em; font-weight: 600;">${m.competition}</span>
+                                        </td>
+                                        <td style="padding: 10px; text-align: right; font-weight: ${homeIsBold ? 'bold' : 'normal'};">${m.homeTeam}</td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <span style="font-weight: bold; color: ${resultColor}; font-size: 1.1em;">${m.homeScore} - ${m.awayScore}</span>
+                                        </td>
+                                        <td style="padding: 10px; font-weight: ${awayIsBold ? 'bold' : 'normal'};">${m.awayTeam}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function switchTab(event, tabId) {
+            // Get the modal body to find tabs within it
+            const modalBody = event.target.closest('.modal-body') || event.target.closest('.modal-content');
+
+            // Remove active class from all tabs in this modal
+            modalBody.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Remove active class from all tab contents in this modal
+            modalBody.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+
+            // Show the corresponding tab content
+            const tabContent = document.getElementById(tabId);
+            if (tabContent) {
+                tabContent.classList.add('active');
+            }
+        }
+
+        function closeMatchModal() {
+            const modal = document.getElementById('matchModal');
+            modal.classList.remove('active');
+        }
+
+        function showTeamModal(teamId) {
+            const modal = document.getElementById('teamModal');
+            const modalTitle = document.getElementById('modalTeamTitle');
+            const modalBody = document.getElementById('modalTeamBody');
+
+            const team = teamsData[teamId];
+            if (!team) return;
+
+            modalTitle.textContent = team.name;
+
+            modalBody.innerHTML = `
+                <div class="team-info">
+                    <div class="info-card">
+                        <div class="label">Partidos Jugados</div>
+                        <div class="value">${team.played}</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="label">Puntos</div>
+                        <div class="value">${team.points}</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="label">Diferencia de Goles</div>
+                        <div class="value">${team.goalDifference > 0 ? '+' : ''}${team.goalDifference}</div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 20px 0 15px 0; color: #333;">Resultados</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #4caf50;">${team.won}</div>
+                        <div class="stat-label">Victorias</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #ffa726;">${team.drawn}</div>
+                        <div class="stat-label">Empates</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #e53935;">${team.lost}</div>
+                        <div class="stat-label">Derrotas</div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 20px 0 15px 0; color: #333;">Goles</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">${team.goalsFor}</div>
+                        <div class="stat-label">Goles a Favor</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${team.goalsAgainst}</div>
+                        <div class="stat-label">Goles en Contra</div>
+                    </div>
+                    ${team.avgGoalsFor !== null ? `
+                    <div class="stat-item">
+                        <div class="stat-value">${team.avgGoalsFor.toFixed(2)}</div>
+                        <div class="stat-label">Promedio Goles/Partido</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${team.avgGoalsAgainst.toFixed(2)}</div>
+                        <div class="stat-label">Promedio Goles Recibidos</div>
+                    </div>
+                    ` : ''}
+                </div>
+
+                ${team.cleanSheets !== null ? `
+                <h3 style="margin: 20px 0 15px 0; color: #333;">Estadísticas Adicionales</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">${team.cleanSheets}</div>
+                        <div class="stat-label">Porterías a Cero</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${team.failedToScore}</div>
+                        <div class="stat-label">Sin Marcar</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${team.bttsCount}</div>
+                        <div class="stat-label">Ambos Marcan</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${team.over25Count}</div>
+                        <div class="stat-label">Más de 2.5 Goles</div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 20px 0 15px 0; color: #333;">Rendimiento por Sede</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #4caf50;">${team.homeWins}</div>
+                        <div class="stat-label">Victorias Local</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #ffa726;">${team.homeDraws}</div>
+                        <div class="stat-label">Empates Local</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #e53935;">${team.homeLosses}</div>
+                        <div class="stat-label">Derrotas Local</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #4caf50;">${team.awayWins}</div>
+                        <div class="stat-label">Victorias Visitante</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #ffa726;">${team.awayDraws}</div>
+                        <div class="stat-label">Empates Visitante</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #e53935;">${team.awayLosses}</div>
+                        <div class="stat-label">Derrotas Visitante</div>
+                    </div>
+                </div>
+                ` : ''}
+            `;
+
+            modal.classList.add('active');
+        }
+
+        function closeTeamModal() {
+            const modal = document.getElementById('teamModal');
+            modal.classList.remove('active');
+        }
+
+        function showPlayerModal(playerId) {
+            const modal = document.getElementById('playerModal');
+            const modalName = document.getElementById('modalPlayerName');
+            const modalBody = document.getElementById('modalPlayerBody');
+
+            const player = playerStatsData[playerId];
+            if (!player) return;
+
+            modalName.textContent = player.name;
+
+            modalBody.innerHTML = `
+                <div class="player-info">
+                    <div class="info-card">
+                        <div class="label">Equipo</div>
+                        <div class="value">${player.team}</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="label">Posición</div>
+                        <div class="value">${player.position}</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="label">Nacionalidad</div>
+                        <div class="value">${player.nationality}</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="label">Partidos</div>
+                        <div class="value">${player.matches}</div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 20px 0 15px 0; color: #333;">Estadísticas Ofensivas</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">${player.goals}</div>
+                        <div class="stat-label">Goles</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${player.assists}</div>
+                        <div class="stat-label">Asistencias</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${player.xg.toFixed(1)}</div>
+                        <div class="stat-label">xG</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${player.xa.toFixed(1)}</div>
+                        <div class="stat-label">xA</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${player.shots}</div>
+                        <div class="stat-label">Tiros</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${player.shotsOnTarget}</div>
+                        <div class="stat-label">Tiros a puerta</div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 20px 0 15px 0; color: #333;">Pases y Creación</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">${player.passes}</div>
+                        <div class="stat-label">Pases completados</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${player.passAccuracy.toFixed(1)}%</div>
+                        <div class="stat-label">Precisión pases</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${player.keyPasses}</div>
+                        <div class="stat-label">Pases clave</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${player.dribbles}</div>
+                        <div class="stat-label">Regates exitosos</div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 20px 0 15px 0; color: #333;">Defensa y Disciplina</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">${player.tackles}</div>
+                        <div class="stat-label">Entradas</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${player.interceptions}</div>
+                        <div class="stat-label">Intercepciones</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #ffa726;">${player.yellowCards}</div>
+                        <div class="stat-label">Tarjetas amarillas</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #e53935;">${player.redCards}</div>
+                        <div class="stat-label">Tarjetas rojas</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <strong>${player.minutes.toLocaleString()}</strong> minutos jugados |
+                    <strong>${(player.minutes / 90).toFixed(1)}</strong> partidos completos equivalentes
+                </div>
+            `;
+
+            modal.classList.add('active');
+        }
+
+        function closePlayerModal() {
+            const modal = document.getElementById('playerModal');
+            modal.classList.remove('active');
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('active');
+            }
+        }
+
+        // Close modals with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeMatchModal();
+                closeTeamModal();
+                closePlayerModal();
+            }
+        });
+    </script>
+</body>
+</html>

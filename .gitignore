@@ -1,0 +1,57 @@
+### Django ###
+*.pyc
+*.db
+*.sqlite3
+*.sqlite3-journal
+media/
+static/admin/
+*.rej
+*.orig
+*.old
+*.swp
+*.log
+*.pot
+__pycache__/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# Environment variables (sensitive data)
+.env
+*.env
+!.env.example
+
+# Database
+db.sqlite3
+*.sqlite3
+*.sqlite3.backup*
+db.sqlite3.backup*
+
+# Migrations - keep initial migration, ignore rest
+**/migrations/__pycache__/
+**/migrations/*.pyc
+
+# ML Models (too large)
+predictions/ml/*.pkl
+*.pkl
+
+# Backups and temp files
+salvas/
+*.bak
+*.tmp
+
+# Temporary scripts and utilities
+analyze_data.py
+check_*.py
+cleanup_*.py
+test_*.py
+import_stats_temp.py
+nul
+
+# OS files
+.DS_Store
+Thumbs.db
+
