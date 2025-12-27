@@ -11,6 +11,9 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
     <!-- Select2 -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
@@ -331,7 +334,6 @@
 
         /* Select2 Custom Styling */
         .select2-container--default .select2-selection--multiple {
-            background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 8px;
             min-height: 45px;
@@ -347,7 +349,6 @@
             color: var(--night-sky);
             border: none;
             border-radius: 6px;
-            padding: 3px 8px;
             font-weight: 600;
         }
 
@@ -367,32 +368,6 @@
             border-radius: 8px;
         }
 
-        .select2-container--default .select2-results__option {
-            background: var(--pitch-black);
-            color: var(--gray-text);
-        }
-
-        .select2-container--default .select2-results__option--highlighted[aria-selected] {
-            background: rgba(0, 255, 135, 0.2);
-            color: var(--electric-green);
-        }
-
-        .select2-container--default .select2-results__option[aria-selected=true] {
-            background: rgba(0, 255, 135, 0.1);
-            color: var(--electric-green);
-        }
-
-        .select2-container--default .select2-search--dropdown .select2-search__field {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: var(--white);
-            border-radius: 6px;
-        }
-
-        .select2-container--default .select2-search--dropdown .select2-search__field:focus {
-            border-color: var(--electric-green);
-            outline: none;
-        }
     </style>
 </head>
 <body>
@@ -401,7 +376,7 @@
             <div class="container">
                 <div class="row align-items-center">
                     <div class="col-md-8">
-                        <h1 class="brand-title">⚽ Football Analytics</h1>
+                        <h1 class="brand-title"><i class="fa-solid fa-futbol"></i> Football Analytics</h1>
                         <p class="brand-subtitle">Professional Match Predictions & Statistics</p>
                     </div>
                     <div class="col-md-4">
@@ -409,7 +384,7 @@
                             <a href="{% url 'predictions:matches_list' %}" class="nav-link-custom">Matches</a>
                             <a href="{% url 'predictions:predictions' %}" class="nav-link-custom">Predictions</a>
                             <a href="{% url 'predictions:config' %}" class="nav-link-custom active">Config</a>
-                            <span class="user-badge">👤 {{ user.username }}</span>
+                            <span class="user-badge"><i class="fa-solid fa-user"></i> {{ user.username }}</span>
                             <a href="{% url 'predictions:logout' %}" class="logout-btn">Logout</a>
                         </div>
                     </div>
@@ -432,7 +407,7 @@
                             <option value="{{ comp }}">{{ comp }}</option>
                             {% endfor %}
                         </select>
-                        <small class="text-muted">Select one or more competitions</small>
+                        <small class="text-white">Select one or more competitions</small>
                     </div>
 
                     <div class="col-md-6 mb-3">
@@ -442,7 +417,7 @@
                             <option value="{{ season }}">{{ season }}/{{ season|add:1 }}</option>
                             {% endfor %}
                         </select>
-                        <small class="text-muted">Select one or more seasons</small>
+                        <small class="text-white">Select one or more seasons</small>
                     </div>
                 </div>
 
