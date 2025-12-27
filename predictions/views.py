@@ -697,20 +697,22 @@ def import_progress_sse_view(request, job_id):
                         yield f"data: {json.dumps({'type': 'log', 'message': line})}\n\n"
 
             # Send status update
-            yield f"data: {json.dumps({
+            status_data = {
                 'type': 'status',
                 'status': job.status,
                 'progress': job.progress_percentage,
                 'current_step': job.current_step
-            })}\n\n"
+            }
+            yield f"data: {json.dumps(status_data)}\n\n"
 
             # If job is finished, send completion event and break
             if job.status in ['completed', 'cancelled', 'failed']:
-                yield f"data: {json.dumps({
+                finished_data = {
                     'type': 'finished',
                     'status': job.status,
                     'error': job.error_message
-                })}\n\n"
+                }
+                yield f"data: {json.dumps(finished_data)}\n\n"
                 break
 
             # Check every 500ms
