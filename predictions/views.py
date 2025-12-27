@@ -2,12 +2,18 @@
 Views for predictions app
 """
 
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q, Count, Sum, F, Case, When, IntegerField
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib import messages
+from django import forms
 from predictions.models import Match, Competition, PlayerStats
 
 
+@login_required
 def matches_list(request):
     """
     Display list of matches with filters for competition and season
@@ -374,3 +380,109 @@ def calculate_standings(competition, season):
         team_stats['position'] = i
 
     return standings_list
+
+
+# ============================================================================
+# Authentication Views
+# ============================================================================
+
+class CustomUserCreationForm(UserCreationForm):
+    """
+    Custom registration form with email field
+    """
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={'class': 'form-control'})
+    )
+
+    class Meta:
+        from django.contrib.auth.models import User
+        model = User
+        fields = ('username', 'email', 'password1', 'password2')
+
+    def clean_email(self):
+        from django.contrib.auth.models import User
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError('This email address is already registered.')
+        return email
+
+
+def login_view(request):
+    """
+    Handle user login
+    """
+    # Redirect if already logged in
+    if request.user.is_authenticated:
+        return redirect('predictions:matches_list')
+
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        remember_me = request.POST.get('remember_me')
+
+        # Authenticate user
+        user = authenticate(request, username=username, password=password)
+
+        if user is not None:
+            auth_login(request, user)
+
+            # Set session expiry
+            if not remember_me:
+                # Session expires when browser closes
+                request.session.set_expiry(0)
+            else:
+                # Session expires in 2 weeks
+                request.session.set_expiry(1209600)
+
+            messages.success(request, f'Welcome back, {user.username}!')
+
+            # Redirect to next page or matches list
+            next_url = request.POST.get('next') or request.GET.get('next') or 'predictions:matches_list'
+            return redirect(next_url)
+        else:
+            messages.error(request, 'Invalid username or password.')
+
+    # Pass 'next' parameter to template
+    next_url = request.GET.get('next', '')
+
+    return render(request, 'predictions/login.html', {'next': next_url})
+
+
+def register_view(request):
+    """
+    Handle user registration
+    """
+    # Redirect if already logged in
+    if request.user.is_authenticated:
+        return redirect('predictions:matches_list')
+
+    if request.method == 'POST':
+        form = CustomUserCreationForm(request.POST)
+
+        if form.is_valid():
+            user = form.save()
+            messages.success(request, 'Account created successfully! Please log in.')
+            return redirect('predictions:login')
+        else:
+            # Form errors will be displayed in the template
+            pass
+    else:
+        form = CustomUserCreationForm()
+
+    return render(request, 'predictions/register.html', {'form': form})
+
+
+def logout_view(request):
+    """
+    Handle user logout
+    """
+    username = request.user.username if request.user.is_authenticated else None
+    auth_logout(request)
+
+    if username:
+        messages.info(request, f'You have been logged out, {username}.')
+    else:
+        messages.info(request, 'You have been logged out.')
+
+    return redirect('predictions:login')

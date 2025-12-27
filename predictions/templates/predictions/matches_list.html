@@ -32,6 +32,7 @@
             color: white;
             padding: 30px;
             text-align: center;
+            position: relative;
         }
 
         .header h1 {
@@ -42,6 +43,38 @@
         .header p {
             opacity: 0.9;
             font-size: 1.1em;
+        }
+
+        .user-menu {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-info {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            transform: translateY(-2px);
         }
 
         .filters {
@@ -605,6 +638,10 @@
 <body>
     <div class="container">
         <div class="header">
+            <div class="user-menu">
+                <span class="user-info">👤 {{ user.username }}</span>
+                <a href="{% url 'predictions:logout' %}" class="logout-btn">Logout</a>
+            </div>
             <h1>⚽ Partidos de Fútbol</h1>
             <p>Base de datos de partidos importados desde SofaScore</p>
         </div>

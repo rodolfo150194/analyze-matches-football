@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Football Analytics{% endblock %}</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Google Fonts - Distinctive typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            /* Stadium Night Color Palette */
+            --night-sky: #0A1628;
+            --pitch-black: #121826;
+            --electric-green: #00FF87;
+            --floodlight-glow: rgba(0, 255, 135, 0.15);
+            --gray-text: #94A3B8;
+            --white: #FFFFFF;
+            --accent-blue: #3B82F6;
+            --danger-red: #EF4444;
+            --warning-yellow: #F59E0B;
+
+            /* Tactical grid pattern */
+            --grid-size: 40px;
+            --grid-color: rgba(255, 255, 255, 0.02);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--night-sky);
+            color: var(--white);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Tactical field grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                repeating-linear-gradient(0deg, var(--grid-color) 0px, transparent 1px, transparent var(--grid-size)),
+                repeating-linear-gradient(90deg, var(--grid-color) 0px, transparent 1px, transparent var(--grid-size));
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Animated gradient orb - floodlight effect */
+        body::after {
+            content: '';
+            position: fixed;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, var(--floodlight-glow) 0%, transparent 70%);
+            top: -400px;
+            right: -400px;
+            pointer-events: none;
+            animation: floodlightPulse 8s ease-in-out infinite;
+            z-index: 0;
+        }
+
+        @keyframes floodlightPulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+
+        .auth-container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 480px;
+            padding: 20px;
+        }
+
+        /* Premium card with subtle glow */
+        .auth-card {
+            background: rgba(18, 24, 38, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 48px 40px;
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            position: relative;
+            overflow: hidden;
+            animation: cardSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes cardSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Subtle top glow accent */
+        .auth-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--electric-green), transparent);
+            animation: glowSlide 3s ease-in-out infinite;
+        }
+
+        @keyframes glowSlide {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        /* Logo/Brand section */
+        .brand-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .brand-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, var(--electric-green), var(--accent-blue));
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            box-shadow: 0 8px 24px rgba(0, 255, 135, 0.2);
+            animation: iconFloat 3s ease-in-out infinite;
+        }
+
+        @keyframes iconFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .brand-title {
+            font-family: 'Sora', sans-serif;
+            font-weight: 800;
+            font-size: 28px;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--white), var(--gray-text));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .brand-subtitle {
+            font-size: 14px;
+            color: var(--gray-text);
+            font-weight: 400;
+        }
+
+        /* Form elements */
+        .form-label {
+            font-weight: 500;
+            color: var(--gray-text);
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .form-control {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 14px 18px;
+            color: var(--white);
+            font-size: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--electric-green);
+            box-shadow:
+                0 0 0 4px var(--floodlight-glow),
+                0 8px 16px rgba(0, 0, 0, 0.2);
+            color: var(--white);
+            outline: none;
+        }
+
+        .form-control::placeholder {
+            color: rgba(148, 163, 184, 0.5);
+        }
+
+        /* Checkbox styling */
+        .form-check-input {
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            margin-top: 2px;
+        }
+
+        .form-check-input:checked {
+            background-color: var(--electric-green);
+            border-color: var(--electric-green);
+        }
+
+        .form-check-input:focus {
+            border-color: var(--electric-green);
+            box-shadow: 0 0 0 4px var(--floodlight-glow);
+        }
+
+        .form-check-label {
+            color: var(--gray-text);
+            font-size: 14px;
+            margin-left: 8px;
+        }
+
+        /* Premium button with gradient animation */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--electric-green), #00D974);
+            border: none;
+            border-radius: 12px;
+            padding: 16px 32px;
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--pitch-black);
+            letter-spacing: 0.3px;
+            width: 100%;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(0, 255, 135, 0.3);
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        /* Secondary link buttons */
+        .btn-link {
+            color: var(--electric-green);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .btn-link::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--electric-green);
+            transition: width 0.3s ease;
+        }
+
+        .btn-link:hover {
+            color: var(--electric-green);
+        }
+
+        .btn-link:hover::after {
+            width: 100%;
+        }
+
+        /* Alert messages */
+        .alert {
+            border-radius: 12px;
+            border: none;
+            padding: 14px 18px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            animation: alertSlideIn 0.3s ease;
+        }
+
+        @keyframes alertSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: #FCA5A5;
+            border-left: 3px solid var(--danger-red);
+        }
+
+        .alert-success {
+            background: rgba(0, 255, 135, 0.1);
+            color: var(--electric-green);
+            border-left: 3px solid var(--electric-green);
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            color: #93C5FD;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        /* Divider */
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 24px 0;
+            color: var(--gray-text);
+            font-size: 13px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .divider span {
+            padding: 0 16px;
+        }
+
+        /* Footer links */
+        .auth-footer {
+            text-align: center;
+            margin-top: 32px;
+            padding-top: 32px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .auth-footer p {
+            color: var(--gray-text);
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        /* Responsive */
+        @media (max-width: 576px) {
+            .auth-card {
+                padding: 32px 24px;
+            }
+
+            .brand-title {
+                font-size: 24px;
+            }
+        }
+
+        /* Form validation states */
+        .form-control.is-invalid {
+            border-color: var(--danger-red);
+        }
+
+        .form-control.is-valid {
+            border-color: var(--electric-green);
+        }
+
+        .invalid-feedback {
+            color: #FCA5A5;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .valid-feedback {
+            color: var(--electric-green);
+            font-size: 13px;
+            margin-top: 6px;
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="brand-section">
+                <div class="brand-icon">⚽</div>
+                <h1 class="brand-title">Football Analytics</h1>
+                <p class="brand-subtitle">{% block subtitle %}Professional Match Predictions{% endblock %}</p>
+            </div>
+
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

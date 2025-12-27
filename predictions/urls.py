@@ -23,7 +23,15 @@ def health_check(request):
     })
 
 urlpatterns = [
+    # Health check
     path('health/', health_check, name='health_check'),
-    path('', RedirectView.as_view(url='/matches/', permanent=False), name='home'),
+
+    # Authentication
+    path('login/', views.login_view, name='login'),
+    path('register/', views.register_view, name='register'),
+    path('logout/', views.logout_view, name='logout'),
+
+    # Main pages
+    path('', RedirectView.as_view(url='/login/', permanent=False), name='home'),
     path('matches/', views.matches_list, name='matches_list'),
 ]

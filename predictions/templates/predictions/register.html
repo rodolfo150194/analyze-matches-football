@@ -1,0 +1,271 @@
+{% extends "predictions/auth_base.html" %}
+
+{% block title %}Register - Football Analytics{% endblock %}
+
+{% block subtitle %}Join the prediction platform{% endblock %}
+
+{% block content %}
+    <!-- Display messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Display form errors -->
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">
+            {% for error in form.non_field_errors %}
+                {{ error }}
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'predictions:register' %}" id="registerForm">
+        {% csrf_token %}
+
+        <!-- Username Field -->
+        <div class="mb-4">
+            <label for="id_username" class="form-label">Username</label>
+            <input
+                type="text"
+                class="form-control {% if form.username.errors %}is-invalid{% endif %}"
+                id="id_username"
+                name="username"
+                placeholder="Choose a username"
+                value="{{ form.username.value|default:'' }}"
+                required
+                autofocus
+            >
+            {% if form.username.errors %}
+                <div class="invalid-feedback d-block">
+                    {% for error in form.username.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% else %}
+                <small class="form-text" style="color: var(--gray-text); font-size: 12px;">
+                    Letters, numbers, and @/./+/-/_ characters only
+                </small>
+            {% endif %}
+        </div>
+
+        <!-- Email Field -->
+        <div class="mb-4">
+            <label for="id_email" class="form-label">Email Address</label>
+            <input
+                type="email"
+                class="form-control {% if form.email.errors %}is-invalid{% endif %}"
+                id="id_email"
+                name="email"
+                placeholder="your.email@example.com"
+                value="{{ form.email.value|default:'' }}"
+                required
+            >
+            {% if form.email.errors %}
+                <div class="invalid-feedback d-block">
+                    {% for error in form.email.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Password Field -->
+        <div class="mb-4">
+            <label for="id_password1" class="form-label">Password</label>
+            <input
+                type="password"
+                class="form-control {% if form.password1.errors %}is-invalid{% endif %}"
+                id="id_password1"
+                name="password1"
+                placeholder="Create a strong password"
+                required
+            >
+            {% if form.password1.errors %}
+                <div class="invalid-feedback d-block">
+                    {% for error in form.password1.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% else %}
+                <small class="form-text" style="color: var(--gray-text); font-size: 12px;">
+                    At least 8 characters, not entirely numeric
+                </small>
+            {% endif %}
+        </div>
+
+        <!-- Confirm Password Field -->
+        <div class="mb-4">
+            <label for="id_password2" class="form-label">Confirm Password</label>
+            <input
+                type="password"
+                class="form-control {% if form.password2.errors %}is-invalid{% endif %}"
+                id="id_password2"
+                name="password2"
+                placeholder="Re-enter your password"
+                required
+            >
+            {% if form.password2.errors %}
+                <div class="invalid-feedback d-block">
+                    {% for error in form.password2.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+            <div id="passwordMatchFeedback" class="invalid-feedback" style="display: none;">
+                Passwords do not match
+            </div>
+        </div>
+
+        <!-- Terms Acceptance -->
+        <div class="mb-4">
+            <div class="form-check">
+                <input
+                    class="form-check-input {% if form.terms.errors %}is-invalid{% endif %}"
+                    type="checkbox"
+                    id="terms"
+                    name="terms"
+                    required
+                >
+                <label class="form-check-label" for="terms">
+                    I agree to the <a href="#" class="btn-link" style="font-size: 14px;">Terms of Service</a> and <a href="#" class="btn-link" style="font-size: 14px;">Privacy Policy</a>
+                </label>
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-primary mb-3">
+            Create Account
+        </button>
+    </form>
+
+    <!-- Footer -->
+    <div class="auth-footer">
+        <p>Already have an account?</p>
+        <a href="{% url 'predictions:login' %}" class="btn-link">Sign in instead</a>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('registerForm');
+        const password1 = document.getElementById('id_password1');
+        const password2 = document.getElementById('id_password2');
+        const username = document.getElementById('id_username');
+        const email = document.getElementById('id_email');
+        const matchFeedback = document.getElementById('passwordMatchFeedback');
+
+        // Real-time password match validation
+        function checkPasswordMatch() {
+            if (password2.value) {
+                if (password1.value === password2.value) {
+                    password2.classList.remove('is-invalid');
+                    password2.classList.add('is-valid');
+                    matchFeedback.style.display = 'none';
+                } else {
+                    password2.classList.remove('is-valid');
+                    password2.classList.add('is-invalid');
+                    matchFeedback.style.display = 'block';
+                }
+            } else {
+                password2.classList.remove('is-valid', 'is-invalid');
+                matchFeedback.style.display = 'none';
+            }
+        }
+
+        password1.addEventListener('input', checkPasswordMatch);
+        password2.addEventListener('input', checkPasswordMatch);
+
+        // Password strength indicator
+        password1.addEventListener('input', function() {
+            const value = this.value;
+            const hasLength = value.length >= 8;
+            const hasNumber = /\d/.test(value);
+            const hasLetter = /[a-zA-Z]/.test(value);
+            const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(value);
+
+            if (value && hasLength && hasNumber && hasLetter) {
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            } else if (value) {
+                this.classList.remove('is-valid');
+            }
+        });
+
+        // Email validation
+        email.addEventListener('blur', function() {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (this.value && emailRegex.test(this.value)) {
+                this.classList.add('is-valid');
+                this.classList.remove('is-invalid');
+            } else if (this.value) {
+                this.classList.add('is-invalid');
+                this.classList.remove('is-valid');
+            }
+        });
+
+        // Username validation (alphanumeric and some special chars)
+        username.addEventListener('blur', function() {
+            const usernameRegex = /^[\w.@+-]+$/;
+            if (this.value && usernameRegex.test(this.value) && this.value.length >= 3) {
+                this.classList.add('is-valid');
+                this.classList.remove('is-invalid');
+            } else if (this.value) {
+                this.classList.add('is-invalid');
+                this.classList.remove('is-valid');
+            }
+        });
+
+        // Form submission validation
+        form.addEventListener('submit', function(e) {
+            let isValid = true;
+
+            // Check all required fields
+            const requiredFields = [username, email, password1, password2];
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    field.classList.add('is-invalid');
+                    isValid = false;
+                }
+            });
+
+            // Check password match
+            if (password1.value !== password2.value) {
+                password2.classList.add('is-invalid');
+                matchFeedback.style.display = 'block';
+                isValid = false;
+            }
+
+            // Check terms
+            const terms = document.getElementById('terms');
+            if (!terms.checked) {
+                terms.classList.add('is-invalid');
+                isValid = false;
+            }
+
+            if (!isValid) {
+                e.preventDefault();
+                // Scroll to first error
+                const firstError = form.querySelector('.is-invalid');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstError.focus();
+                }
+            }
+        });
+
+        // Add subtle animations
+        const inputs = document.querySelectorAll('.form-control');
+        inputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.style.transition = 'transform 0.2s ease';
+                this.parentElement.style.transform = 'translateX(0)';
+            });
+        });
+    });
+</script>
+{% endblock %}
