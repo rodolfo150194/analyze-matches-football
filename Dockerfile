@@ -26,11 +26,11 @@ RUN pip install --upgrade pip && \
 # Copy project files
 COPY . .
 
-# Make start script executable
-RUN chmod +x start.sh
-
-# Collect static files
+# Collect static files (skip if fails)
 RUN python manage.py collectstatic --noinput || echo "Static collection skipped"
+
+# Create staticfiles directory with proper permissions
+RUN mkdir -p staticfiles && chmod -R 755 staticfiles
 
 # Create a non-root user
 RUN useradd -m -u 1000 appuser && \
@@ -40,5 +40,14 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Run startup script
-CMD ["./start.sh"]
+# Run migrations and start gunicorn directly
+CMD python manage.py migrate --noinput && \
+    exec gunicorn football_django.wsgi:application \
+    --bind 0.0.0.0:8000 \
+    --workers 2 \
+    --threads 4 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
+    --log-level debug \
+    --capture-output
