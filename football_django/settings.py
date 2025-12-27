@@ -41,6 +41,10 @@ else:
 if not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ['*']
 
+# Trust proxy headers (required for Dokploy/reverse proxies)
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 
 # Application definition
 
