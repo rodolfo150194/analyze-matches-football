@@ -640,14 +640,14 @@
                 <div class="row align-items-center">
                     <div class="col-md-8">
                         <h1 class="brand-title">⚽ Football Analytics</h1>
-                        <p class="brand-subtitle">ML Model Predictions</p>
+                        <p class="brand-subtitle">Professional Match Predictions & Statistics</p>
                     </div>
                     <div class="col-md-4">
                         <div class="user-menu justify-content-end">
                             <a href="{% url 'predictions:matches_list' %}" class="nav-link-custom">Matches</a>
                             <a href="{% url 'predictions:predictions' %}" class="nav-link-custom active">Predictions</a>
                             <a href="{% url 'predictions:config' %}" class="nav-link-custom">Config</a>
-                            <span class="user-badge">{{ user.username }}</span>
+                            <span class="user-badge">👤 {{ user.username }}</span>
                             <a href="{% url 'predictions:logout' %}" class="logout-btn">Logout</a>
                         </div>
                     </div>
