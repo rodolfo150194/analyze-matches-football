@@ -1,0 +1,80 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Database
+*.sqlite3
+*.db
+db.sqlite3
+*.sqlite3.backup*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Static files (will be collected during build)
+staticfiles/
+static/
+
+# Media files
+media/
+
+# ML Models (too large - should be downloaded or mounted)
+*.pkl
+predictions/ml/*.pkl
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+salvas/
+nul
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+test_*.py
+check_*.py
+analyze_*.py
+cleanup_*.py
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# OS
+.DS_Store
+Thumbs.db

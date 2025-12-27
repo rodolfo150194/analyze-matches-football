@@ -5,6 +5,7 @@
 *.sqlite3-journal
 media/
 static/admin/
+staticfiles/
 *.rej
 *.orig
 *.old

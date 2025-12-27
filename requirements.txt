@@ -2,8 +2,13 @@
 Django>=4.2,<5.0
 asgiref>=3.7.0
 
+# Production Server
+gunicorn>=21.2.0
+whitenoise>=6.6.0
+
 # Database
-psycopg2-binary>=2.9.0  # PostgreSQL adapter (optional)
+psycopg2-binary>=2.9.0  # PostgreSQL adapter
+dj-database-url>=2.1.0  # Database URL parser
 
 # Data Processing
 pandas>=2.0.0
