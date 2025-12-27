@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import Configuration - Football Analytics</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Select2 -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --night-sky: #0A1628;
+            --pitch-black: #121826;
+            --electric-green: #00FF87;
+            --floodlight-glow: rgba(0, 255, 135, 0.15);
+            --gray-text: #94A3B8;
+            --white: #FFFFFF;
+            --card-bg: rgba(18, 24, 38, 0.85);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--night-sky);
+            color: var(--white);
+            min-height: 100vh;
+        }
+
+        /* Tactical grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0px, transparent 1px, transparent 40px),
+                repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0px, transparent 1px, transparent 40px);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+        }
+
+        .config-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-family: 'Sora', sans-serif;
+            font-weight: 700;
+            margin-bottom: 2rem;
+        }
+
+        h3 {
+            font-family: 'Sora', sans-serif;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            color: var(--gray-text);
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control, .form-select {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--white);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+        }
+
+        .form-control:focus, .form-select:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--electric-green);
+            color: var(--white);
+            box-shadow: 0 0 0 0.2rem rgba(0, 255, 135, 0.25);
+        }
+
+        .form-select option {
+            background: var(--pitch-black);
+            color: var(--white);
+        }
+
+        .form-check-input {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .form-check-input:checked {
+            background-color: var(--electric-green);
+            border-color: var(--electric-green);
+        }
+
+        .form-check-label {
+            color: var(--gray-text);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--electric-green), #00CC6F);
+            border: none;
+            color: var(--night-sky);
+            font-weight: 600;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 255, 135, 0.3);
+            color: var(--night-sky);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            background: #EF4444;
+            border: none;
+            color: var(--white);
+        }
+
+        .btn-danger:hover {
+            background: #DC2626;
+        }
+
+        #progress-container {
+            display: none;
+        }
+
+        .progress {
+            height: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, var(--electric-green), #00CC6F);
+            transition: width 0.5s ease;
+            font-weight: 600;
+        }
+
+        #logs-display {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .log-line {
+            margin-bottom: 0.25rem;
+            color: var(--gray-text);
+        }
+
+        .log-line.success {
+            color: var(--electric-green);
+        }
+
+        .log-line.error {
+            color: #EF4444;
+        }
+
+        .log-line.warning {
+            color: #F59E0B;
+        }
+
+        .history-table {
+            background: transparent;
+            color: var(--white);
+        }
+
+        .history-table th {
+            background: rgba(0, 255, 135, 0.1);
+            color: var(--electric-green);
+            border-color: rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+        }
+
+        .history-table td {
+            border-color: rgba(255, 255, 255, 0.1);
+            color: var(--gray-text);
+        }
+
+        .badge-running {
+            background: #3B82F6;
+        }
+
+        .badge-completed {
+            background: var(--electric-green);
+            color: var(--night-sky);
+        }
+
+        .badge-failed {
+            background: #EF4444;
+        }
+
+        .badge-cancelled {
+            background: #94A3B8;
+        }
+
+        .nav-link-custom {
+            color: var(--gray-text);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            position: relative;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .nav-link-custom:hover {
+            color: var(--electric-green);
+            background: rgba(0, 255, 135, 0.05);
+        }
+
+        .nav-link-custom.active {
+            color: var(--electric-green);
+            background: rgba(0, 255, 135, 0.1);
+        }
+
+        /* Select2 Custom Styling */
+        .select2-container--default .select2-selection--multiple {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            min-height: 45px;
+        }
+
+        .select2-container--default.select2-container--focus .select2-selection--multiple {
+            border-color: var(--electric-green);
+            box-shadow: 0 0 0 0.2rem rgba(0, 255, 135, 0.25);
+        }
+
+        .select2-container--default .select2-selection--multiple .select2-selection__choice {
+            background: var(--electric-green);
+            color: var(--night-sky);
+            border: none;
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-weight: 600;
+        }
+
+        .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+            color: var(--night-sky);
+            font-weight: bold;
+            margin-right: 5px;
+        }
+
+        .select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+            color: #EF4444;
+        }
+
+        .select2-dropdown {
+            background: var(--pitch-black);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        .select2-container--default .select2-results__option {
+            background: var(--pitch-black);
+            color: var(--gray-text);
+        }
+
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background: rgba(0, 255, 135, 0.2);
+            color: var(--electric-green);
+        }
+
+        .select2-container--default .select2-results__option[aria-selected=true] {
+            background: rgba(0, 255, 135, 0.1);
+            color: var(--electric-green);
+        }
+
+        .select2-container--default .select2-search--dropdown .select2-search__field {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--white);
+            border-radius: 6px;
+        }
+
+        .select2-container--default .select2-search--dropdown .select2-search__field:focus {
+            border-color: var(--electric-green);
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <!-- Navigation -->
+        <div class="mb-4">
+            <a href="{% url 'predictions:matches_list' %}" class="nav-link-custom">Matches</a>
+            <a href="{% url 'predictions:predictions' %}" class="nav-link-custom">Predictions</a>
+            <a href="{% url 'predictions:config' %}" class="nav-link-custom active">Config</a>
+        </div>
+
+        <h1><span style="color: var(--electric-green);">Import</span> Configuration</h1>
+
+        <!-- Import Form -->
+        <div class="config-card">
+            <h3>SofaScore Complete Import</h3>
+            <form id="import-form">
+                {% csrf_token %}
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Competitions</label>
+                        <select id="competitions-select" name="competitions" class="form-select" multiple="multiple" required>
+                            {% for comp in competitions %}
+                            <option value="{{ comp }}">{{ comp }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Select one or more competitions</small>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Seasons</label>
+                        <select id="seasons-select" name="seasons" class="form-select" multiple="multiple" required>
+                            {% for season in seasons %}
+                            <option value="{{ season }}">{{ season }}/{{ season|add:1 }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Select one or more seasons</small>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Import Options</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="all_data" id="all_data" checked>
+                        <label class="form-check-label" for="all_data">
+                            Import All Data (teams, matches, players, standings)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="teams_only" id="teams_only">
+                        <label class="form-check-label" for="teams_only">Teams Only</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="matches_only" id="matches_only">
+                        <label class="form-check-label" for="matches_only">Matches Only</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="players_only" id="players_only">
+                        <label class="form-check-label" for="players_only">Players Only</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="standings_only" id="standings_only">
+                        <label class="form-check-label" for="standings_only">Standings Only</label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Advanced Options</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="force" id="force">
+                        <label class="form-check-label" for="force">Force (overwrite existing data)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="dry_run" id="dry_run">
+                        <label class="form-check-label" for="dry_run">Dry Run (preview only, don't save)</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="start-btn">
+                    Start Import
+                </button>
+            </form>
+        </div>
+
+        <!-- Progress Section -->
+        <div class="config-card" id="progress-container">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3>Import Progress</h3>
+                <button class="btn btn-danger btn-sm" id="cancel-btn">Cancel Import</button>
+            </div>
+
+            <div class="mb-3">
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         id="progress-bar"
+                         role="progressbar"
+                         style="width: 0%"
+                         aria-valuenow="0"
+                         aria-valuemin="0"
+                         aria-valuemax="100">0%</div>
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <strong>Status:</strong> <span id="status-text">Initializing...</span>
+            </div>
+
+            <div class="mb-3">
+                <strong>Current Step:</strong> <span id="current-step">-</span>
+            </div>
+
+            <div>
+                <strong>Logs:</strong>
+                <div id="logs-display"></div>
+            </div>
+        </div>
+
+        <!-- Import History -->
+        <div class="config-card">
+            <h3>Import History</h3>
+            <div class="table-responsive">
+                <table class="table history-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Status</th>
+                            <th>Competitions</th>
+                            <th>Seasons</th>
+                            <th>Started</th>
+                            <th>Completed</th>
+                            <th>Dry Run</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-tbody">
+                        <tr>
+                            <td colspan="7" class="text-center">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery (required for Select2) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <script>
+        let currentJobId = null;
+        let eventSource = null;
+
+        // Load import history
+        async function loadHistory() {
+            const response = await fetch("{% url 'predictions:import_history' %}");
+            const data = await response.json();
+
+            const tbody = document.getElementById('history-tbody');
+            tbody.innerHTML = '';
+
+            if (data.jobs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">No import history</td></tr>';
+                return;
+            }
+
+            data.jobs.forEach(job => {
+                const row = document.createElement('tr');
+
+                let statusBadge = '';
+                if (job.status === 'running') statusBadge = '<span class="badge badge-running">Running</span>';
+                else if (job.status === 'completed') statusBadge = '<span class="badge badge-completed">Completed</span>';
+                else if (job.status === 'failed') statusBadge = '<span class="badge badge-failed">Failed</span>';
+                else if (job.status === 'cancelled') statusBadge = '<span class="badge badge-cancelled">Cancelled</span>';
+                else statusBadge = '<span class="badge bg-secondary">Pending</span>';
+
+                row.innerHTML = `
+                    <td>#${job.id}</td>
+                    <td>${statusBadge}</td>
+                    <td>${job.competitions}</td>
+                    <td>${job.seasons}</td>
+                    <td>${job.started_at ? new Date(job.started_at).toLocaleString() : '-'}</td>
+                    <td>${job.completed_at ? new Date(job.completed_at).toLocaleString() : '-'}</td>
+                    <td>${job.dry_run ? 'Yes' : 'No'}</td>
+                `;
+
+                tbody.appendChild(row);
+            });
+        }
+
+        // Start import
+        document.getElementById('import-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(e.target);
+
+            // Get selected competitions and seasons
+            const compSelect = document.querySelector('[name="competitions"]');
+            const seasonSelect = document.querySelector('[name="seasons"]');
+            const competitions = Array.from(compSelect.selectedOptions).map(o => o.value).join(',');
+            const seasons = Array.from(seasonSelect.selectedOptions).map(o => o.value).join(',');
+
+            formData.set('competitions', competitions);
+            formData.set('seasons', seasons);
+
+            try {
+                const response = await fetch("{% url 'predictions:start_import' %}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentJobId = data.job_id;
+
+                    // Show progress container
+                    document.getElementById('progress-container').style.display = 'block';
+                    document.getElementById('start-btn').disabled = true;
+
+                    // Connect to SSE
+                    connectSSE(currentJobId);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error starting import: ' + error);
+            }
+        });
+
+        // Connect to SSE for progress updates
+        function connectSSE(jobId) {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource(`/config/import-progress/${jobId}/`);
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'log') {
+                    appendLog(data.message);
+                } else if (data.type === 'status') {
+                    updateStatus(data.status, data.progress, data.current_step);
+                } else if (data.type === 'finished') {
+                    handleFinished(data.status, data.error);
+                }
+            };
+
+            eventSource.onerror = function() {
+                console.error('SSE connection error');
+            };
+        }
+
+        // Append log line
+        function appendLog(message) {
+            const logsDiv = document.getElementById('logs-display');
+            const logLine = document.createElement('div');
+            logLine.className = 'log-line';
+
+            if (message.includes('[ERROR]') || message.includes('✗')) {
+                logLine.classList.add('error');
+            } else if (message.includes('[OK]') || message.includes('✓') || message.includes('[SUCCESS]')) {
+                logLine.classList.add('success');
+            } else if (message.includes('[WARN]')) {
+                logLine.classList.add('warning');
+            }
+
+            logLine.textContent = message;
+            logsDiv.appendChild(logLine);
+
+            // Auto-scroll to bottom
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        // Update status
+        function updateStatus(status, progress, currentStep) {
+            document.getElementById('status-text').textContent = status.toUpperCase();
+            document.getElementById('current-step').textContent = currentStep || '-';
+
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.style.width = `${progress}%`;
+            progressBar.textContent = `${progress}%`;
+            progressBar.setAttribute('aria-valuenow', progress);
+        }
+
+        // Handle finished
+        function handleFinished(status, error) {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+
+            document.getElementById('start-btn').disabled = false;
+            document.getElementById('cancel-btn').disabled = true;
+
+            if (status === 'completed') {
+                appendLog('[SUCCESS] Import completed successfully!');
+                updateStatus('completed', 100, 'Done');
+            } else if (status === 'failed') {
+                appendLog(`[ERROR] Import failed: ${error}`);
+                updateStatus('failed', 0, 'Failed');
+            } else if (status === 'cancelled') {
+                appendLog('[CANCELLED] Import was cancelled');
+                updateStatus('cancelled', 0, 'Cancelled');
+            }
+
+            // Reload history
+            loadHistory();
+        }
+
+        // Cancel import
+        document.getElementById('cancel-btn').addEventListener('click', async () => {
+            if (!currentJobId) return;
+
+            if (!confirm('Are you sure you want to cancel this import?')) return;
+
+            try {
+                const csrfToken = document.querySelector('[name="csrfmiddlewaretoken"]').value;
+                const response = await fetch(`/config/cancel-import/${currentJobId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    appendLog('[CANCELLED] Cancelling import...');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error cancelling import: ' + error);
+            }
+        });
+
+        // Load history on page load
+        loadHistory();
+
+        // Initialize Select2
+        $(document).ready(function() {
+            $('#competitions-select').select2({
+                placeholder: 'Select competitions',
+                allowClear: true,
+                width: '100%'
+            });
+
+            $('#seasons-select').select2({
+                placeholder: 'Select seasons',
+                allowClear: true,
+                width: '100%'
+            });
+        });
+    </script>
+</body>
+</html>

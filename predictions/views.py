@@ -563,3 +563,219 @@ def predictions_view(request):
     }
 
     return render(request, 'predictions/predictions.html', context)
+
+
+# ============================================================================
+# Import Configuration Views
+# ============================================================================
+
+import json
+import threading
+import time
+from django.http import JsonResponse, StreamingHttpResponse
+from django.shortcuts import get_object_or_404
+from django.views.decorators.http import require_http_methods
+from django.core.management import call_command
+
+
+@login_required
+def config_view(request):
+    """Configuration page for imports"""
+    context = {
+        'competitions': ['PL', 'PD', 'BL1', 'SA', 'FL1', 'CL'],
+        'seasons': [2024, 2023, 2022, 2021, 2020],
+    }
+    return render(request, 'predictions/config.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def start_import_view(request):
+    """Start background import job"""
+    from predictions.models import ImportJob
+
+    try:
+        # Parse form data
+        competitions = request.POST.get('competitions', '')
+        seasons = request.POST.get('seasons', '')
+        all_data = request.POST.get('all_data') == 'on'
+        teams_only = request.POST.get('teams_only') == 'on'
+        matches_only = request.POST.get('matches_only') == 'on'
+        players_only = request.POST.get('players_only') == 'on'
+        standings_only = request.POST.get('standings_only') == 'on'
+        force = request.POST.get('force') == 'on'
+        dry_run = request.POST.get('dry_run') == 'on'
+
+        # Validate inputs
+        if not competitions or not seasons:
+            return JsonResponse({
+                'success': False,
+                'error': 'Competitions and seasons are required'
+            }, status=400)
+
+        # Determine what to import
+        if all_data:
+            import_teams = True
+            import_matches = True
+            import_players = True
+            import_standings = True
+        else:
+            import_teams = teams_only
+            import_matches = matches_only
+            import_players = players_only
+            import_standings = standings_only
+
+        # Create ImportJob
+        job = ImportJob.objects.create(
+            created_by=request.user,
+            competitions=competitions,
+            seasons=seasons,
+            import_teams=import_teams,
+            import_matches=import_matches,
+            import_players=import_players,
+            import_standings=import_standings,
+            force=force,
+            dry_run=dry_run,
+            status='pending',
+        )
+
+        # Start background thread
+        def run_import_in_thread(job_id):
+            """Run import command in thread"""
+            try:
+                call_command('run_import_job', f'--job-id={job_id}')
+            except Exception as e:
+                # Update job with error
+                try:
+                    job = ImportJob.objects.get(pk=job_id)
+                    job.status = 'failed'
+                    job.error_message = str(e)
+                    job.append_log(f'[ERROR] Thread execution failed: {str(e)}')
+                    job.save()
+                except:
+                    pass
+
+        thread = threading.Thread(target=run_import_in_thread, args=(job.id,), daemon=True)
+        thread.start()
+
+        return JsonResponse({
+            'success': True,
+            'job_id': job.id,
+            'message': 'Import started successfully'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def import_progress_sse_view(request, job_id):
+    """Server-Sent Events endpoint for real-time progress"""
+    from predictions.models import ImportJob
+
+    def event_stream():
+        """Generator that yields SSE events"""
+        job = get_object_or_404(ImportJob, pk=job_id)
+        last_log_length = 0
+
+        while True:
+            # Reload job from database
+            job.refresh_from_db()
+
+            # Get new log lines since last check
+            current_logs = job.logs
+            if len(current_logs) > last_log_length:
+                new_logs = current_logs[last_log_length:]
+                last_log_length = len(current_logs)
+
+                # Send new log lines
+                for line in new_logs.split('\n'):
+                    if line.strip():
+                        yield f"data: {json.dumps({'type': 'log', 'message': line})}\n\n"
+
+            # Send status update
+            yield f"data: {json.dumps({
+                'type': 'status',
+                'status': job.status,
+                'progress': job.progress_percentage,
+                'current_step': job.current_step
+            })}\n\n"
+
+            # If job is finished, send completion event and break
+            if job.status in ['completed', 'cancelled', 'failed']:
+                yield f"data: {json.dumps({
+                    'type': 'finished',
+                    'status': job.status,
+                    'error': job.error_message
+                })}\n\n"
+                break
+
+            # Check every 500ms
+            time.sleep(0.5)
+
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'  # Disable nginx buffering
+    return response
+
+
+@login_required
+@require_http_methods(["POST"])
+def cancel_import_view(request, job_id):
+    """Cancel running import"""
+    from predictions.models import ImportJob
+
+    try:
+        job = get_object_or_404(ImportJob, pk=job_id)
+
+        if job.status == 'running':
+            job.cancel_requested = True
+            job.status = 'cancelled'
+            job.completed_at = timezone.now()
+            job.append_log('[CANCELLED] Import cancelled by user')
+            job.save()
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Import cancelled'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Job is not running'
+            }, status=400)
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def import_history_view(request):
+    """Get import history as JSON"""
+    from predictions.models import ImportJob
+
+    jobs = ImportJob.objects.filter(
+        created_by=request.user
+    ).order_by('-created_at')[:50]
+
+    data = []
+    for job in jobs:
+        data.append({
+            'id': job.id,
+            'status': job.status,
+            'competitions': job.competitions,
+            'seasons': job.seasons,
+            'created_at': job.created_at.isoformat(),
+            'started_at': job.started_at.isoformat() if job.started_at else None,
+            'completed_at': job.completed_at.isoformat() if job.completed_at else None,
+            'dry_run': job.dry_run,
+            'error_message': job.error_message,
+        })
+
+    return JsonResponse({'jobs': data})

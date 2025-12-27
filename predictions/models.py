@@ -851,3 +851,85 @@ class PlayerInjury(models.Model):
 
     def __str__(self):
         return f"{self.player.name} - {self.status} ({self.injury_type or 'Unknown'})"
+
+
+class ImportJob(models.Model):
+    """
+    Background import job tracking
+    Stores metadata, logs, and progress for data imports
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+        ('failed', 'Failed'),
+    ]
+
+    # Job metadata
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='import_jobs'
+    )
+
+    # Import parameters
+    competitions = models.CharField(max_length=200)  # "PL,PD,BL1"
+    seasons = models.CharField(max_length=200)  # "2023,2024"
+    import_teams = models.BooleanField(default=False)
+    import_matches = models.BooleanField(default=False)
+    import_players = models.BooleanField(default=False)
+    import_standings = models.BooleanField(default=False)
+    force = models.BooleanField(default=False)
+    dry_run = models.BooleanField(default=False)
+
+    # Results (JSON stored as text)
+    result_counts = models.TextField(null=True, blank=True)
+
+    # Logs (append-only)
+    logs = models.TextField(default='')
+
+    # Progress tracking
+    progress_percentage = models.IntegerField(default=0)
+    current_step = models.CharField(max_length=500, default='')
+
+    # Cancellation flag
+    cancel_requested = models.BooleanField(default=False, db_index=True)
+
+    # Error tracking
+    error_message = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'import_jobs'
+        verbose_name = 'Import Job'
+        verbose_name_plural = 'Import Jobs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"Import {self.id} - {self.status} - {self.competitions}"
+
+    def append_log(self, message):
+        """Thread-safe log appending"""
+        from django.db import transaction
+        with transaction.atomic():
+            # Reload to get latest logs
+            job = ImportJob.objects.select_for_update().get(pk=self.pk)
+            job.logs += message + '\n'
+            job.save(update_fields=['logs'])
+
+    def get_log_lines(self):
+        """Return logs as list of lines"""
+        return [line for line in self.logs.split('\n') if line.strip()]
