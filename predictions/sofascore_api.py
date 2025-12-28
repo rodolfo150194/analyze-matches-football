@@ -69,7 +69,7 @@ class SofascoreAPI:
             ]
 
             self.browser = self.playwright.chromium.launch(
-                headless=True,
+                headless=False,
                 args=launch_args,
                 slow_mo=random.randint(100, 300) if self.is_vps else 0,  # Simular humano en VPS
             )
