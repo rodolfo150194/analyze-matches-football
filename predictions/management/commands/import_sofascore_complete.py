@@ -247,10 +247,11 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("[FORCE] Sobreescribira datos existentes"))
         self.stdout.write("")
 
-        # Run async import
+        # Run import
+        self.import_complete_async(
             competitions, seasons, force, dry_run,
             import_teams, import_matches, import_players, import_standings
-        ))
+        )
 
     def import_complete_async(self, competitions, seasons, force, dry_run,
                                    import_teams, import_matches, import_players, import_standings):
@@ -328,7 +329,7 @@ class Command(BaseCommand):
 
         try:
             # Get competition
-            competition = Competition.objects.get)(code=comp_code)
+            competition = Competition.objects.get(code=comp_code)
         except Competition.DoesNotExist:
             self.stdout.write(
                 self.style.ERROR(f"[ERROR] Competicion {comp_code} no encontrada en BD")
@@ -356,7 +357,7 @@ class Command(BaseCommand):
 
         # Update competition with SofaScore ID
         if not dry_run:
-            self._update_competition)(competition, tournament_id)
+            self._update_competition(competition, tournament_id)
 
         result = {
             'teams_created': 0,
@@ -526,21 +527,19 @@ class Command(BaseCommand):
                 pass  # Continue without manager if fetch fails
 
         # GLOBAL lookup by api_id (not filtered by competition)
-        existing_team = 
-            Team.objects.filter(api_id=team_id).first
-        )()
+        existing_team = Team.objects.filter(api_id=team_id).first()
 
         if existing_team:
             # Team exists globally - just update if needed
             if force:
-                self._update_team)(
+                self._update_team(
                     existing_team, team_name, short_name, manager_name
                 )
                 return 'updated'
             return 'skipped'
 
         # Create new team (linked to primary competition)
-        self._create_team)(
+        self._create_team(
             competition, team_name, short_name, team_id, manager_name
         )
 
@@ -658,13 +657,8 @@ class Command(BaseCommand):
             return 'skipped', False
 
         # Find teams by GLOBAL api_id
-        home_team = 
-            Team.objects.filter(api_id=home_team_id).first
-        )()
-
-        away_team = 
-            Team.objects.filter(api_id=away_team_id).first
-        )()
+        home_team = Team.objects.filter(api_id=home_team_id).first()
+        away_team = Team.objects.filter(api_id=away_team_id).first()
 
         if not home_team or not away_team:
             return 'skipped', False
@@ -676,19 +670,17 @@ class Command(BaseCommand):
         match_data = self.extract_match_data(match_info)
 
         # Check if match exists
-        existing_match = 
-            Match.objects.filter(api_id=event_id).first
-        )()
+        existing_match = Match.objects.filter(api_id=event_id).first()
 
         match_obj = None
         if existing_match:
             if force:
-                self._update_match)(existing_match, match_data)
+                self._update_match(existing_match, match_data)
                 match_obj = existing_match
             else:
                 return 'skipped', False
         else:
-            match_obj = self._create_match)(
+            match_obj = self._create_match(
                 competition, home_team, away_team, season, event_id, match_data
             )
 
@@ -782,7 +774,7 @@ class Command(BaseCommand):
                 if referee_data:
                     referee_name = referee_data.get('name')
                     if referee_name:
-                        self._update_match_details)(
+                        self._update_match_details(
                             match, {'referee': referee_name}
                         )
 
@@ -791,7 +783,7 @@ class Command(BaseCommand):
                 if venue_data:
                     venue_name = venue_data.get('stadium', {}).get('name')
                     if venue_name:
-                        self._update_match_details)(
+                        self._update_match_details(
                             match, {'venue': venue_name}
                         )
 
@@ -801,7 +793,7 @@ class Command(BaseCommand):
                 stats = self.extract_match_statistics(statistics)
 
                 if stats:
-                    self._update_match_stats)(match, stats)
+                    self._update_match_stats(match, stats)
                     has_match_stats = True
 
             # Import player statistics from lineups
@@ -954,9 +946,7 @@ class Command(BaseCommand):
             return 'skipped'
 
         # Find team by GLOBAL api_id
-        team = 
-            Team.objects.filter(api_id=team_id).first
-        )()
+        team = Team.objects.filter(api_id=team_id).first()
 
         if not team:
             return 'skipped'
@@ -975,7 +965,7 @@ class Command(BaseCommand):
         # Create/update player stats
         stats_data = self.extract_player_stats(player_data)
 
-        self._update_or_create_player_stats)(
+        self._update_or_create_player_stats(
             player, team, competition, season, stats_data
         )
 
@@ -984,15 +974,13 @@ class Command(BaseCommand):
     def get_or_create_player(self, player_name, player_id, team):
         """Get or create player"""
         if player_id:
-            existing = 
-                Player.objects.filter(sofascore_id=player_id).first
-            )()
+            existing = Player.objects.filter(sofascore_id=player_id).first()
 
             if existing:
                 return existing, False
 
         # Create new player
-        player = self._create_player)(
+        player = self._create_player(
             player_name, player_id, team
         )
 
@@ -1129,14 +1117,12 @@ class Command(BaseCommand):
                     continue
 
                 # Find player by sofascore_id
-                player = 
-                    Player.objects.filter(sofascore_id=player_id).first
-                )()
+                player = Player.objects.filter(sofascore_id=player_id).first()
 
                 # If player doesn't exist, create it
                 if not player:
                     player_name = player_info.get('name', 'Unknown')
-                    player = self._create_player)(
+                    player = self._create_player(
                         player_name, player_id, team
                     )
 
@@ -1144,7 +1130,7 @@ class Command(BaseCommand):
                 stats_data = self.extract_player_match_stats(player_entry, team)
 
                 # Save match player stats
-                self._create_or_update_match_player_stats)(
+                self._create_or_update_match_player_stats(
                     match, player, team, stats_data
                 )
 
@@ -1304,9 +1290,7 @@ class Command(BaseCommand):
         team_id = team_data.get('id')
 
         # Find team
-        team = 
-            Team.objects.filter(api_id=team_id).first
-        )()
+        team = Team.objects.filter(api_id=team_id).first()
 
         # Extract player info
         player = None
@@ -1314,9 +1298,7 @@ class Command(BaseCommand):
         if player_data:
             player_id = player_data.get('id')
             if player_id:
-                player = 
-                    Player.objects.filter(sofascore_id=player_id).first
-                )()
+                player = Player.objects.filter(sofascore_id=player_id).first()
 
         # Extract assist player (for goals)
         assist_player = None
@@ -1324,9 +1306,7 @@ class Command(BaseCommand):
             assist_data = incident_data.get('assist1', {})
             assist_id = assist_data.get('id')
             if assist_id:
-                assist_player = 
-                    Player.objects.filter(sofascore_id=assist_id).first
-                )()
+                assist_player = Player.objects.filter(sofascore_id=assist_id).first()
 
         # Extract substitution players
         player_in = None
@@ -1340,9 +1320,7 @@ class Command(BaseCommand):
             if player_in_data:
                 player_in_id = player_in_data.get('id')
                 if player_in_id:
-                    player_in = 
-                        Player.objects.filter(sofascore_id=player_in_id).first
-                    )()
+                    player_in = Player.objects.filter(sofascore_id=player_in_id).first()
 
         # Extract score after incident (for goals)
         score_home = None
@@ -1352,7 +1330,7 @@ class Command(BaseCommand):
             score_away = safe_int(incident_data.get('awayScore'))
 
         # Create or update incident
-        incident_obj = self._create_match_incident)(
+        incident_obj = self._create_match_incident(
             match=match,
             team=team,
             player=player,
@@ -1426,13 +1404,11 @@ class Command(BaseCommand):
             return False
 
         # Find player by sofascore_id
-        player = 
-            Player.objects.filter(sofascore_id=player_id).first
-        )()
+        player = Player.objects.filter(sofascore_id=player_id).first()
 
         # If player doesn't exist, create basic player record
         if not player:
-            player = self._create_player)(
+            player = self._create_player(
                 player_name, player_id, team
             )
 
@@ -1469,7 +1445,7 @@ class Command(BaseCommand):
                 severity = 'Severe'
 
         # Create or update injury
-        injury_obj = self._create_or_update_injury)(
+        injury_obj = self._create_or_update_injury(
             player=player,
             team=team,
             injury_type=injury_type,
