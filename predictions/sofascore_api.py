@@ -1,16 +1,22 @@
 from playwright.sync_api import sync_playwright
-try:
-    from playwright_stealth.stealth import Stealth
-    STEALTH_AVAILABLE = True
-except ImportError:
-    STEALTH_AVAILABLE = False
-    print("[WARN] playwright-stealth no disponible - continuando sin anti-detección avanzada")
-
 from datetime import datetime, timedelta
 import pandas as pd
 import time
 import random
 import os
+
+# Stealth solo se activa si USE_STEALTH=true en .env
+USE_STEALTH = os.getenv('USE_STEALTH', 'false').lower() == 'true'
+
+if USE_STEALTH:
+    try:
+        from playwright_stealth.stealth import Stealth
+        STEALTH_AVAILABLE = True
+    except ImportError:
+        STEALTH_AVAILABLE = False
+        print("[WARN] playwright-stealth solicitado pero no disponible")
+else:
+    STEALTH_AVAILABLE = False
 
 BASE_URL = "https://www.sofascore.com/api/v1"
 
@@ -35,123 +41,111 @@ class SofascoreAPI:
         if is_vps is None:
             is_vps = os.getenv('IS_VPS', 'false').lower() == 'true'
 
-        # Delays más largos para VPS (anti-detección agresiva)
+        self.is_vps = is_vps
+
+        # Configurar delays
         if is_vps:
-            self.delay_min = max(delay_min, 15)  # Mínimo 15 segundos en VPS
-            self.delay_max = max(delay_max, 25)  # Máximo 25 segundos en VPS
-            print(f"[INFO] Modo VPS activado - Delays: {self.delay_min}-{self.delay_max}s")
+            # VPS: delays más largos para anti-detección
+            self.delay_min = max(delay_min, 15)
+            self.delay_max = max(delay_max, 25)
+            print(f"[INFO] Modo VPS - Delays: {self.delay_min}-{self.delay_max}s, Stealth: {STEALTH_AVAILABLE}")
         else:
+            # Local: delays normales
             self.delay_min = delay_min
             self.delay_max = delay_max
-            print(f"[INFO] Modo Local - Delays: {self.delay_min}-{self.delay_max}s")
+            print(f"[INFO] Modo Local - Delays: {self.delay_min}-{self.delay_max}s (sin stealth)")
 
         self.last_request_time = 0
         self.initialized = False
-        self.is_vps = is_vps
 
     def _init_browser(self):
         if self.playwright is None:
             self.playwright = sync_playwright().start()
 
-            # Argumentos mejorados para anti-detección
-            launch_args = [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-software-rasterizer',
-                '--disable-extensions',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-features=IsolateOrigins,site-per-process',
-                '--disable-web-security',  # Útil para evitar CORS en scraping
-                '--disable-features=VizDisplayCompositor',
-                '--lang=en-US,en',
-            ]
+            # Configuración simple por defecto (local)
+            # Solo anti-detección avanzada en VPS
+            if self.is_vps:
+                # VPS: Configuración anti-detección completa
+                launch_args = [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                ]
+                headless = True
+                slow_mo = random.randint(100, 300)
+            else:
+                # Local: Configuración simple (headless también)
+                launch_args = ['--no-sandbox']
+                headless = True  # Headless por defecto también en local
+                slow_mo = 0
 
             self.browser = self.playwright.chromium.launch(
-                headless=False,
+                headless=headless,
                 args=launch_args,
-                slow_mo=random.randint(100, 300) if self.is_vps else 0,  # Simular humano en VPS
+                slow_mo=slow_mo,
             )
 
-            # Seleccionar User-Agent aleatorio
+            # User-Agent aleatorio
             user_agent = random.choice(USER_AGENTS)
-            print(f"[INFO] User-Agent: {user_agent[:50]}...")
 
-            # Crear contexto del navegador (mejor que new_page directamente)
+            # Crear contexto con configuración básica
             context = self.browser.new_context(
                 user_agent=user_agent,
                 viewport={'width': 1920, 'height': 1080},
-                locale='en-US',
-                timezone_id='America/New_York',  # Timezone realista
-                # Permisos como un usuario real
-                permissions=['geolocation'],
-                geolocation={'latitude': 40.7128, 'longitude': -74.0060},  # NYC
-                color_scheme='light',
-                device_scale_factor=1,
             )
 
-            # Crear página desde el contexto
+            # Crear página
             self.page = context.new_page()
 
-            # APLICAR PLAYWRIGHT-STEALTH (oculta automatización)
-            if STEALTH_AVAILABLE:
+            # Aplicar stealth SOLO en VPS y si está disponible
+            if self.is_vps and STEALTH_AVAILABLE:
                 stealth_config = Stealth()
                 stealth_config.use_sync(self.page)
-                print("[INFO] ✓ Playwright-stealth aplicado correctamente")
-            else:
-                print("[WARN] Playwright-stealth no disponible - usando solo headers básicos")
+                print("[INFO] ✓ Playwright-stealth activado")
 
-            # Headers adicionales más realistas
+            # Headers básicos
             self.page.set_extra_http_headers({
                 'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'en-US,en;q=0.9,es;q=0.8',
-                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept-Language': 'en-US,en;q=0.9',
                 'Referer': 'https://www.sofascore.com/',
-                'Origin': 'https://www.sofascore.com',
-                'Connection': 'keep-alive',
-                'Sec-Fetch-Dest': 'empty',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'same-origin',
-                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-                'Sec-Ch-Ua-Mobile': '?0',
-                'Sec-Ch-Ua-Platform': '"Windows"',
-                'DNT': '1',  # Do Not Track
-                'Upgrade-Insecure-Requests': '1',
             })
 
-            # Inyectar scripts para ocultar webdriver
-            self.page.add_init_script("""
-                // Ocultar que somos un navegador automatizado
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
+            # Inyectar scripts anti-detección SOLO en VPS
+            if self.is_vps:
+                self.page.add_init_script("""
+                    // Ocultar que somos un navegador automatizado
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined
+                    });
 
-                // Fingir plugins de navegador real
-                Object.defineProperty(navigator, 'plugins', {
-                    get: () => [1, 2, 3, 4, 5]
-                });
+                    // Fingir plugins de navegador real
+                    Object.defineProperty(navigator, 'plugins', {
+                        get: () => [1, 2, 3, 4, 5]
+                    });
 
-                // Fingir idiomas
-                Object.defineProperty(navigator, 'languages', {
-                    get: () => ['en-US', 'en', 'es']
-                });
+                    // Fingir idiomas
+                    Object.defineProperty(navigator, 'languages', {
+                        get: () => ['en-US', 'en', 'es']
+                    });
 
-                // Chrome object
-                window.chrome = {
-                    runtime: {}
-                };
+                    // Chrome object
+                    window.chrome = {
+                        runtime: {}
+                    };
 
-                // Permisos
-                const originalQuery = window.navigator.permissions.query;
-                window.navigator.permissions.query = (parameters) => (
-                    parameters.name === 'notifications' ?
-                        Promise.resolve({ state: Notification.permission }) :
-                        originalQuery(parameters)
-                );
-            """)
+                    // Permisos
+                    const originalQuery = window.navigator.permissions.query;
+                    window.navigator.permissions.query = (parameters) => (
+                        parameters.name === 'notifications' ?
+                            Promise.resolve({ state: Notification.permission }) :
+                            originalQuery(parameters)
+                    );
+                """)
 
             # Visitar la página principal para obtener cookies y sesión
+            # Solo simulación humana en VPS
             if not self.initialized:
                 try:
                     print("[INFO] Inicializando sesión en SofaScore...")
@@ -159,25 +153,27 @@ class SofascoreAPI:
                     # Ir a la página principal
                     self.page.goto('https://www.sofascore.com/', wait_until='domcontentloaded', timeout=60000)
 
-                    # Simular comportamiento humano
-                    time.sleep(random.uniform(2, 4))
+                    # Simular comportamiento humano SOLO en VPS
+                    if self.is_vps:
+                        # Scroll aleatorio
+                        time.sleep(random.uniform(2, 4))
+                        self.page.evaluate(f'window.scrollBy(0, {random.randint(100, 300)})')
+                        time.sleep(random.uniform(1, 2))
 
-                    # Scroll aleatorio (como humano)
-                    self.page.evaluate(f'window.scrollBy(0, {random.randint(100, 300)})')
-                    time.sleep(random.uniform(1, 2))
+                        # Mover mouse
+                        self.page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+                        time.sleep(random.uniform(0.5, 1.5))
 
-                    # Mover mouse aleatoriamente
-                    self.page.mouse.move(random.randint(100, 500), random.randint(100, 500))
-                    time.sleep(random.uniform(0.5, 1.5))
+                        # Delay extra
+                        delay = random.uniform(5, 10)
+                        print(f"[INFO] VPS - Esperando {delay:.1f}s adicionales...")
+                        time.sleep(delay)
+                    else:
+                        # Local: solo espera corta
+                        time.sleep(1)
 
                     self.initialized = True
-                    print("[INFO] Sesión inicializada correctamente")
-
-                    # Delay extra en VPS después de inicializar
-                    if self.is_vps:
-                        delay = random.uniform(5, 10)
-                        print(f"[INFO] Esperando {delay:.1f}s adicionales (modo VPS)...")
-                        time.sleep(delay)
+                    print("[INFO] ✓ Sesión inicializada")
 
                 except Exception as e:
                     print(f"[WARN] Error inicializando sesión: {e}")

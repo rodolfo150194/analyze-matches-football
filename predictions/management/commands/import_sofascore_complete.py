@@ -248,14 +248,14 @@ class Command(BaseCommand):
         self.stdout.write("")
 
         # Run import
-        self.import_complete_async(
+        self.import_complete(
             competitions, seasons, force, dry_run,
             import_teams, import_matches, import_players, import_standings
         )
 
-    def import_complete_async(self, competitions, seasons, force, dry_run,
-                                   import_teams, import_matches, import_players, import_standings):
-        """Async wrapper for complete import"""
+    def import_complete(self, competitions, seasons, force, dry_run,
+                             import_teams, import_matches, import_players, import_standings):
+        """Complete import (sync mode)"""
         api = SofascoreAPI()
 
         # Initialize progress
