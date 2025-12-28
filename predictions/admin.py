@@ -2,7 +2,8 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
     Competition, Team, Match, TeamStats, HeadToHead, Prediction,
-    Player, PlayerStats, MatchPlayerStats, ShotEvent, TeamMarketValue, PlayerInjury
+    Player, PlayerStats, MatchPlayerStats, ShotEvent, TeamMarketValue, PlayerInjury,
+    MatchIncident
 )
 
 
@@ -861,3 +862,75 @@ class PlayerInjuryAdmin(admin.ModelAdmin):
             return format_html('<strong>{} days (actual)</strong>', duration)
         return '-'
     get_duration.short_description = 'Duration'
+
+
+@admin.register(MatchIncident)
+class MatchIncidentAdmin(admin.ModelAdmin):
+    list_display = (
+        'get_match',
+        'get_time',
+        'incident_type',
+        'player',
+        'team',
+        'get_score',
+        'is_home'
+    )
+    list_filter = (
+        'incident_type',
+        'is_home',
+        ('match__utc_date', admin.DateFieldListFilter),
+    )
+    search_fields = (
+        'player__name',
+        'match__home_team__name',
+        'match__away_team__name',
+        'description'
+    )
+    ordering = ('-match__utc_date', 'time')
+    list_select_related = ('match__home_team', 'match__away_team', 'player', 'team')
+
+    fieldsets = (
+        ('Match Info', {
+            'fields': ('match', 'team', 'is_home')
+        }),
+        ('Incident Details', {
+            'fields': (
+                'incident_type',
+                ('time', 'time_added'),
+                'description',
+            )
+        }),
+        ('Players Involved', {
+            'fields': (
+                'player',
+                'assist_player',
+                ('player_in', 'player_out'),
+            )
+        }),
+        ('Score After Incident', {
+            'fields': (
+                ('score_home', 'score_away'),
+            )
+        }),
+    )
+
+    def get_match(self, obj):
+        try:
+            home = obj.match.home_team.short_name if obj.match.home_team else '?'
+            away = obj.match.away_team.short_name if obj.match.away_team else '?'
+            return f"{home} vs {away}"
+        except Exception:
+            return "Match info unavailable"
+    get_match.short_description = 'Match'
+
+    def get_time(self, obj):
+        if obj.time_added:
+            return format_html("<strong>{}'</strong> +{}", obj.time, obj.time_added)
+        return format_html("<strong>{}'</strong>", obj.time)
+    get_time.short_description = 'Time'
+
+    def get_score(self, obj):
+        if obj.score_home is not None and obj.score_away is not None:
+            return f"{obj.score_home}-{obj.score_away}"
+        return '-'
+    get_score.short_description = 'Score After'

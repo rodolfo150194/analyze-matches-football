@@ -31,6 +31,7 @@ class Team(models.Model):
     short_name = models.CharField(max_length=50)
     tla = models.CharField(max_length=10)  # Abreviatura (3 letras)
     crest_url = models.URLField(max_length=500, null=True, blank=True)
+    manager = models.CharField(max_length=200, null=True, blank=True, help_text='Current team manager/coach')
     competition = models.ForeignKey(
         Competition,
         on_delete=models.CASCADE,
@@ -127,6 +128,7 @@ class Match(models.Model):
     # Información del partido
     attendance = models.IntegerField(null=True, blank=True)
     referee = models.CharField(max_length=200, null=True, blank=True)
+    venue = models.CharField(max_length=300, null=True, blank=True, help_text='Stadium/venue name')
 
     # Estadísticas adicionales
     hit_woodwork_home = models.IntegerField(null=True, blank=True)
@@ -510,6 +512,7 @@ class Player(models.Model):
     short_name = models.CharField(max_length=100)
     nationality = models.CharField(max_length=100, null=True, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
+    photo = models.CharField(max_length=500, null=True, blank=True, help_text='Path to player photo')
 
     # Posición
     position = models.CharField(max_length=20)  # GK, DF, MF, FW
@@ -853,6 +856,81 @@ class PlayerInjury(models.Model):
         return f"{self.player.name} - {self.status} ({self.injury_type or 'Unknown'})"
 
 
+class MatchIncident(models.Model):
+    """Eventos del partido (goles, tarjetas, sustituciones)"""
+    INCIDENT_TYPE_CHOICES = [
+        ('goal', 'Goal'),
+        ('ownGoal', 'Own Goal'),
+        ('penalty', 'Penalty'),
+        ('missedPenalty', 'Missed Penalty'),
+        ('yellowCard', 'Yellow Card'),
+        ('redCard', 'Red Card'),
+        ('yellowRedCard', 'Second Yellow Card'),
+        ('substitution', 'Substitution'),
+        ('injuryTime', 'Injury Time'),
+        ('var', 'VAR Decision'),
+    ]
+
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='incidents')
+    player = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='match_incidents')
+    team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True, related_name='incidents')
+
+    # Tipo y momento del incidente
+    incident_type = models.CharField(max_length=20, choices=INCIDENT_TYPE_CHOICES)
+    time = models.IntegerField(help_text='Minute of the incident')
+    time_added = models.IntegerField(null=True, blank=True, help_text='Added time minutes (e.g., 45+2)')
+
+    # Detalles del incidente
+    score_home = models.IntegerField(null=True, blank=True, help_text='Home score after this incident')
+    score_away = models.IntegerField(null=True, blank=True, help_text='Away score after this incident')
+    assist_player = models.ForeignKey(
+        Player,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assists_incidents',
+        help_text='Player who assisted (for goals)'
+    )
+
+    # Para sustituciones
+    player_in = models.ForeignKey(
+        Player,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='substitutions_in',
+        help_text='Player coming in (for substitutions)'
+    )
+    player_out = models.ForeignKey(
+        Player,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='substitutions_out',
+        help_text='Player going out (for substitutions)'
+    )
+
+    # Información adicional
+    is_home = models.BooleanField(default=True, help_text='True if home team incident')
+    description = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'match_incidents'
+        verbose_name = 'Match Incident'
+        verbose_name_plural = 'Match Incidents'
+        ordering = ['match', 'time', 'time_added']
+        indexes = [
+            models.Index(fields=['match', 'incident_type']),
+            models.Index(fields=['player', 'incident_type']),
+            models.Index(fields=['match', 'time']),
+        ]
+
+    def __str__(self):
+        time_str = f"{self.time}'" if not self.time_added else f"{self.time}+{self.time_added}'"
+        player_str = self.player.name if self.player else 'Unknown'
+        return f"{self.match} - {time_str} {self.incident_type}: {player_str}"
+
+
 class ImportJob(models.Model):
     """
     Background import job tracking
@@ -929,6 +1007,15 @@ class ImportJob(models.Model):
             job = ImportJob.objects.select_for_update().get(pk=self.pk)
             job.logs += message + '\n'
             job.save(update_fields=['logs'])
+
+    def update_progress(self, percentage, step):
+        """Thread-safe progress updating"""
+        # Use .update() instead of .save() to avoid stale data issues
+        # This is atomic and safe to call from async contexts via sync_to_async
+        ImportJob.objects.filter(pk=self.pk).update(
+            progress_percentage=percentage,
+            current_step=step
+        )
 
     def get_log_lines(self):
         """Return logs as list of lines"""

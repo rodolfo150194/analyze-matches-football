@@ -82,6 +82,31 @@ python manage.py cleanup_duplicate_matches --dry-run  # Preview only
 python manage.py cleanup_duplicate_matches  # Actually remove duplicates
 ```
 
+### Download Team Logos and Player Photos
+```bash
+# Download images from SofaScore API and store locally in media/ folder
+# Images saved as: media/teams/{team_id}.png and media/players/{player_id}.png
+# Updates Team.crest_url and Player.photo fields with relative paths
+
+# Download everything (teams + players)
+python manage.py download_images --teams --players
+
+# Download only team logos
+python manage.py download_images --teams-only
+
+# Download only player photos
+python manage.py download_images --players-only
+
+# Preview without downloading
+python manage.py download_images --dry-run --limit 10
+
+# Re-download existing images
+python manage.py download_images --teams --players --force
+
+# Download with limit (for testing)
+python manage.py download_images --teams-only --limit 20
+```
+
 ### Calculate Statistics
 ```bash
 # Calculate ALL statistics (TeamStats + HeadToHead) - RECOMMENDED
@@ -176,6 +201,7 @@ python manage.py runserver
     - **consolidate_teams.py** - Merge duplicate teams (exact name matching)
     - **consolidate_teams_fuzzy.py** - Merge duplicate teams (fuzzy name matching)
     - **cleanup_duplicate_matches.py** - Remove duplicate matches (keeps api_id version)
+    - **download_images.py** - Download team logos and player photos from SofaScore
     - **calculate_stats.py** - Calculate ALL statistics (wrapper for team_stats + h2h)
     - **calculate_team_stats.py** - Calculate TeamStats per team/season
     - **calculate_head_to_head.py** - Calculate HeadToHead records between teams
@@ -199,6 +225,7 @@ python manage.py runserver
 - → h2h_as_team1, h2h_as_team2 (HeadToHead records)
 - → players (Player)
 - **Global unique constraint**: api_id (not per competition)
+- **crest_url**: Path to team logo (e.g., 'teams/2523.png')
 
 **Match** (historical and future)
 - References: competition, home_team, away_team
@@ -215,6 +242,7 @@ python manage.py runserver
 - Basic info: name, position, nationality, date_of_birth, height, market_value
 - Statistics: goals, assists, appearances, minutes_played, yellow_cards, red_cards
 - Advanced: xG, xA, rating, shots, shots_on_target, pass_accuracy
+- **photo**: Path to player photo (e.g., 'players/12345.png')
 
 **TeamStats** (calculated per team/season/competition)
 - General: matches_played, wins, draws, losses, goals_for/against, points, goal_difference

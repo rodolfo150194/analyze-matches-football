@@ -23,6 +23,7 @@ def matches_list(request):
     competition_code = request.GET.get('competition', '')
     season = request.GET.get('season', '')
     status = request.GET.get('status', '')
+    matchday = request.GET.get('matchday', '')
     page = request.GET.get('page', 1)
 
     # Start with all matches
@@ -47,6 +48,14 @@ def matches_list(request):
     if status:
         matches = matches.filter(status=status)
 
+    matchday_int = None
+    if matchday:
+        try:
+            matchday_int = int(matchday)
+            matches = matches.filter(matchday=matchday_int)
+        except ValueError:
+            pass
+
     # Order by date (most recent first)
     matches = matches.order_by('-utc_date')
 
@@ -67,6 +76,15 @@ def matches_list(request):
 
     # Get available statuses
     status_choices = Match.STATUS_CHOICES
+
+    # Get available matchdays (filtered by competition and season if selected)
+    matchdays_query = Match.objects.filter(matchday__isnull=False)
+    if competition_code:
+        matchdays_query = matchdays_query.filter(competition__code=competition_code)
+    if season_int:
+        matchdays_query = matchdays_query.filter(season=season_int)
+
+    available_matchdays = matchdays_query.values_list('matchday', flat=True).distinct().order_by('matchday')
 
     # Calculate standings if competition and season are selected
     standings = None
@@ -241,9 +259,11 @@ def matches_list(request):
         'matches': matches_page,
         'competitions': competitions,
         'available_seasons': available_seasons,
+        'available_matchdays': available_matchdays,
         'status_choices': status_choices,
         'selected_competition': competition_code,
         'selected_season': season,
+        'selected_matchday': matchday,
         'selected_status': status,
         'total_matches': paginator.count,
         'standings': standings,
@@ -583,7 +603,7 @@ def config_view(request):
     """Configuration page for imports"""
     context = {
         'competitions': ['PL', 'PD', 'BL1', 'SA', 'FL1', 'CL'],
-        'seasons': [2024, 2023, 2022, 2021, 2020],
+        'seasons': [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015],
     }
     return render(request, 'predictions/config.html', context)
 

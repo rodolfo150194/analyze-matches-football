@@ -119,6 +119,25 @@ SOFASCORE_SEASON_IDS = load_season_ids()
 class Command(BaseCommand):
     help = 'Complete unified import from SofaScore API'
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.job_id = None
+
+    async def update_progress(self, percentage, step):
+        """Update progress in ImportJob if job_id is set"""
+        if self.job_id:
+            try:
+                from predictions.models import ImportJob
+
+                # Use sync_to_async to call Django ORM from async context
+                def _update():
+                    job = ImportJob.objects.get(pk=self.job_id)
+                    job.update_progress(percentage, step)
+
+                await sync_to_async(_update)()
+            except ImportJob.DoesNotExist:
+                pass
+
     def add_arguments(self, parser):
         parser.add_argument(
             '--competitions',
@@ -167,6 +186,12 @@ class Command(BaseCommand):
             action='store_true',
             help='Preview import without saving to database'
         )
+        parser.add_argument(
+            '--job-id',
+            type=int,
+            required=False,
+            help='ImportJob ID for progress tracking'
+        )
 
     def handle(self, *args, **options):
         # Parse arguments
@@ -179,6 +204,7 @@ class Command(BaseCommand):
         standings_only = options['standings_only']
         force = options['force']
         dry_run = options['dry_run']
+        self.job_id = options.get('job_id')  # Store for progress tracking
 
         # If all_data, enable everything except if specific flags are set
         if all_data:
@@ -201,13 +227,13 @@ class Command(BaseCommand):
         self.stdout.write("")
         self.stdout.write("Modulos a importar:")
         if import_teams:
-            self.stdout.write("  [X] Equipos")
+            self.stdout.write("[X] Equipos")
         if import_matches:
-            self.stdout.write("  [X] Partidos + Estadisticas")
+            self.stdout.write("[X] Partidos + Estadisticas")
         if import_players:
-            self.stdout.write("  [X] Jugadores + Estadisticas")
+            self.stdout.write("[X] Jugadores + Estadisticas")
         if import_standings:
-            self.stdout.write("  [X] Clasificacion/Tabla")
+            self.stdout.write("[X] Clasificacion/Tabla")
 
         if dry_run:
             self.stdout.write(self.style.WARNING("\n[DRY-RUN] No se guardara nada"))
@@ -226,6 +252,9 @@ class Command(BaseCommand):
         """Async wrapper for complete import"""
         api = SofascoreAPI()
 
+        # Initialize progress
+        await self.update_progress(0, "Iniciando importacion...")
+
         # Global counters
         total_stats = {
             'teams_created': 0,
@@ -241,10 +270,14 @@ class Command(BaseCommand):
 
         try:
             # Process each competition and season
+            total_items = len(competitions) * len(seasons)
+            current_item = 0
+
             for comp_code in competitions:
                 for season in seasons:
+                    current_item += 1
                     self.stdout.write(f"\n{'='*80}")
-                    self.stdout.write(f"{comp_code} - Temporada {season}/{season + 1}")
+                    self.stdout.write(f"{comp_code} - Temporada {season}/{season + 1} ({current_item}/{total_items})")
                     self.stdout.write("=" * 80)
 
                     result = await self.import_season_complete(
@@ -260,6 +293,7 @@ class Command(BaseCommand):
             await api.close()
 
         # Summary
+        await self.update_progress(100, "Importacion completada!")
         self.stdout.write("\n" + "=" * 80)
         self.stdout.write(self.style.SUCCESS('RESUMEN TOTAL'))
         self.stdout.write("=" * 80)
@@ -292,7 +326,7 @@ class Command(BaseCommand):
             competition = await sync_to_async(Competition.objects.get)(code=comp_code)
         except Competition.DoesNotExist:
             self.stdout.write(
-                self.style.ERROR(f"  [ERROR] Competicion {comp_code} no encontrada en BD")
+                self.style.ERROR(f"[ERROR] Competicion {comp_code} no encontrada en BD")
             )
             return None
 
@@ -334,6 +368,7 @@ class Command(BaseCommand):
         # 1. Import teams
         if import_teams:
             self.stdout.write("\n[1/4] EQUIPOS")
+            await self.update_progress(10, f"Importando equipos: {comp_code} {season}")
             teams_result = await self.import_teams(
                 api, competition, tournament_id, season_id, season, force, dry_run
             )
@@ -341,7 +376,7 @@ class Command(BaseCommand):
             result['teams_updated'] = teams_result.get('teams_updated', 0)
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"  [OK] {result['teams_created']} creados, "
+                    f"[OK] {result['teams_created']} creados, "
                     f"{result['teams_updated']} actualizados"
                 )
             )
@@ -349,6 +384,7 @@ class Command(BaseCommand):
         # 2. Import matches with statistics
         if import_matches:
             self.stdout.write("\n[2/4] PARTIDOS + ESTADISTICAS")
+            await self.update_progress(30, f"Importando partidos: {comp_code} {season}")
             matches_result = await self.import_matches_with_stats(
                 api, competition, tournament_id, season_id, season, force, dry_run
             )
@@ -357,7 +393,7 @@ class Command(BaseCommand):
             result['match_stats_imported'] = matches_result.get('stats_imported', 0)
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"  [OK] {result['matches_created']} creados, "
+                    f"[OK] {result['matches_created']} creados, "
                     f"{result['matches_updated']} actualizados, "
                     f"{result['match_stats_imported']} con stats"
                 )
@@ -366,6 +402,7 @@ class Command(BaseCommand):
         # 3. Import players and player stats
         if import_players:
             self.stdout.write("\n[3/4] JUGADORES + ESTADISTICAS")
+            await self.update_progress(60, f"Importando jugadores: {comp_code} {season}")
             players_result = await self.import_players_with_stats(
                 api, competition, tournament_id, season_id, season, force, dry_run
             )
@@ -383,16 +420,18 @@ class Command(BaseCommand):
         # 4. Import team standings/classification
         if import_standings:
             self.stdout.write("\n[4/4] CLASIFICACION/TABLA")
+            await self.update_progress(85, f"Importando clasificacion: {comp_code} {season}")
             standings_result = await self.import_standings(
                 api, competition, tournament_id, season_id, season, force, dry_run
             )
             result['standings_imported'] = standings_result.get('teams_processed', 0)
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"  [OK] {result['standings_imported']} equipos procesados"
+                    f"[OK] {result['standings_imported']} equipos procesados"
                 )
             )
 
+        await self.update_progress(95, f"Completado: {comp_code} {season}")
         return result
 
     def _update_competition(self, competition, tournament_id):
@@ -410,7 +449,7 @@ class Command(BaseCommand):
             teams_data = await api.get_season_teams(tournament_id, season_id)
 
             if not teams_data or 'teams' not in teams_data:
-                self.stdout.write(self.style.WARNING("  [WARN] No teams found"))
+                self.stdout.write(self.style.WARNING("[WARN] No teams found"))
                 return result
 
             teams_list = teams_data.get('teams', [])
@@ -433,14 +472,14 @@ class Command(BaseCommand):
                     if team_result == 'created':
                         result['teams_created'] += 1
                         if idx % 10 != 0:  # Solo mostrar si no se mostró arriba
-                            self.stdout.write(f"      [{idx}/{total_teams}] ✓ {team_name} - CREADO")
+                            self.stdout.write(f"[{idx}/{total_teams}] ✓ {team_name} - CREADO")
                     elif team_result == 'updated':
                         result['teams_updated'] += 1
 
                 except Exception as e:
                     team_name = team_info.get('name', 'Unknown')
                     self.stdout.write(
-                        self.style.WARNING(f"      [{idx}/{total_teams}] ✗ {team_name}: {e}")
+                        self.style.WARNING(f"[{idx}/{total_teams}] ✗ {team_name}: {e}")
                     )
                     continue
 
@@ -515,7 +554,7 @@ class Command(BaseCommand):
                 return result
 
             total_matches = len(matches_data)
-            self.stdout.write(f"    Procesando {total_matches} partidos...")
+            self.stdout.write(f"Procesando {total_matches} partidos...")
 
             for idx, match_info in enumerate(matches_data, 1):
                 try:
@@ -527,7 +566,7 @@ class Command(BaseCommand):
                     # Log cada 10 partidos o el primero/último
                     if idx % 10 == 0 or idx == 1 or idx == total_matches:
                         self.stdout.write(
-                            f"      [{idx}/{total_matches}] {home_team_name} vs {away_team_name} "
+                            f"[{idx}/{total_matches}] {home_team_name} vs {away_team_name} "
                             f"(ID: {match_id}, Status: {match_status})"
                         )
 
@@ -543,7 +582,7 @@ class Command(BaseCommand):
                         if idx % 10 != 0 and idx != 1 and idx != total_matches:
                             stats_msg = " + stats" if has_stats else ""
                             self.stdout.write(
-                                f"      [{idx}/{total_matches}] ✓ {home_team_name} vs {away_team_name} - CREADO{stats_msg}"
+                                f"[{idx}/{total_matches}] ✓ {home_team_name} vs {away_team_name} - CREADO{stats_msg}"
                             )
                     elif match_result == 'updated':
                         result['matches_updated'] += 1
@@ -553,14 +592,14 @@ class Command(BaseCommand):
                         if idx % 10 != 0 and idx != 1 and idx != total_matches:
                             stats_msg = " + stats" if has_stats else ""
                             self.stdout.write(
-                                f"      [{idx}/{total_matches}] ↻ {home_team_name} vs {away_team_name} - ACTUALIZADO{stats_msg}"
+                                f"[{idx}/{total_matches}] ↻ {home_team_name} vs {away_team_name} - ACTUALIZADO{stats_msg}"
                             )
 
                     # Mostrar progreso cada 10 partidos
                     if idx % 10 == 0:
                         self.stdout.write(
                             self.style.SUCCESS(
-                                f"      Progreso: {idx}/{total_matches} - "
+                                f"Progreso: {idx}/{total_matches} - "
                                 f"Creados: {result['matches_created']}, "
                                 f"Actualizados: {result['matches_updated']}, "
                                 f"Con stats: {result['stats_imported']}"
@@ -571,12 +610,12 @@ class Command(BaseCommand):
                     home_team_name = match_info.get('homeTeam', {}).get('name', 'Unknown')
                     away_team_name = match_info.get('awayTeam', {}).get('name', 'Unknown')
                     self.stdout.write(
-                        self.style.WARNING(f"      [{idx}/{total_matches}] ✗ {home_team_name} vs {away_team_name}: {e}")
+                        self.style.WARNING(f"[{idx}/{total_matches}] ✗ {home_team_name} vs {away_team_name}: {e}")
                     )
                     continue
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"  [ERROR] {e}"))
+            self.stdout.write(self.style.ERROR(f"[ERROR] {e}"))
 
         return result
 
@@ -674,23 +713,21 @@ class Command(BaseCommand):
 
     def _update_match(self, match, data):
         """Update match"""
-        with transaction.atomic():
-            for key, value in data.items():
-                if value is not None:
-                    setattr(match, key, value)
-            match.save()
+        for key, value in data.items():
+            if value is not None:
+                setattr(match, key, value)
+        match.save()
 
     def _create_match(self, competition, home_team, away_team, season, event_id, data):
         """Create match"""
-        with transaction.atomic():
-            return Match.objects.create(
-                competition=competition,
-                season=season,
-                home_team=home_team,
-                away_team=away_team,
-                api_id=event_id,
-                **data
-            )
+        return Match.objects.create(
+            competition=competition,
+            season=season,
+            home_team=home_team,
+            away_team=away_team,
+            api_id=event_id,
+            **data
+        )
 
     async def import_match_stats(self, api, match, event_id):
         """Import match statistics and player statistics"""
@@ -777,11 +814,10 @@ class Command(BaseCommand):
 
     def _update_match_stats(self, match, stats):
         """Update match with statistics"""
-        with transaction.atomic():
-            for key, value in stats.items():
-                if value is not None and hasattr(match, key):
-                    setattr(match, key, value)
-            match.save()
+        for key, value in stats.items():
+            if value is not None and hasattr(match, key):
+                setattr(match, key, value)
+        match.save()
 
     async def import_players_with_stats(self, api, competition, tournament_id, season_id,
                                        season, force, dry_run):
@@ -798,7 +834,7 @@ class Command(BaseCommand):
                 return result
 
             total_players = len(players_data)
-            self.stdout.write(f"    Procesando {total_players} jugadores...")
+            self.stdout.write(f"Procesando {total_players} jugadores...")
 
             for idx, player_data in enumerate(players_data, 1):
                 try:
@@ -825,12 +861,12 @@ class Command(BaseCommand):
                 except Exception as e:
                     player_name = player_data.get('player', {}).get('name', 'Unknown')
                     self.stdout.write(
-                        self.style.WARNING(f"      [{idx}/{total_players}] ✗ {player_name}: {e}")
+                        self.style.WARNING(f"[{idx}/{total_players}] ✗ {player_name}: {e}")
                     )
                     continue
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"  [ERROR] {e}"))
+            self.stdout.write(self.style.ERROR(f"[ERROR] {e}"))
 
         return result
 
@@ -924,17 +960,16 @@ class Command(BaseCommand):
 
     def _update_or_create_player_stats(self, player, team, competition, season, stats_data):
         """Update or create player stats"""
-        with transaction.atomic():
-            PlayerStats.objects.update_or_create(
-                player=player,
-                team=team,
-                competition=competition,
-                season=season,
-                defaults={
-                    **stats_data,
-                    'calculated_at': timezone.now()
-                }
-            )
+        PlayerStats.objects.update_or_create(
+            player=player,
+            team=team,
+            competition=competition,
+            season=season,
+            defaults={
+                **stats_data,
+                'calculated_at': timezone.now()
+            }
+        )
 
     async def import_standings(self, api, competition, tournament_id, season_id,
                               season, force, dry_run):
@@ -957,7 +992,7 @@ class Command(BaseCommand):
             result['teams_processed'] = len(standings) if isinstance(standings, list) else 0
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"  [ERROR] {e}"))
+            self.stdout.write(self.style.ERROR(f"[ERROR] {e}"))
 
         return result
 
@@ -1133,12 +1168,11 @@ class Command(BaseCommand):
 
     def _create_or_update_match_player_stats(self, match, player, team, stats_data):
         """Create or update match player statistics"""
-        with transaction.atomic():
-            MatchPlayerStats.objects.update_or_create(
-                match=match,
-                player=player,
-                defaults={
-                    'team': team,
-                    **stats_data
-                }
-            )
+        MatchPlayerStats.objects.update_or_create(
+            match=match,
+            player=player,
+            defaults={
+                'team': team,
+                **stats_data
+            }
+        )

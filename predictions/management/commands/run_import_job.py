@@ -8,25 +8,61 @@ from django.utils import timezone
 from predictions.models import ImportJob
 import io
 import traceback
+import threading
+import time
 
 
 class LogCapturingStringIO(io.StringIO):
-    """StringIO that also writes to ImportJob"""
+    """StringIO that captures output and flushes periodically to database"""
     def __init__(self, job_id, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.job_id = job_id
+        self.log_lines = []
+        self.lock = threading.Lock()
+        self.running = True
+
+        # Start periodic flush thread
+        self.flush_thread = threading.Thread(target=self._periodic_flush, daemon=True)
+        self.flush_thread.start()
 
     def write(self, s):
-        """Override write to capture and store in database"""
+        """Override write to capture logs"""
         super().write(s)
+        # Accumulate logs in thread-safe way
+        if s.strip():
+            with self.lock:
+                self.log_lines.append(s.strip())
 
-        # Append to ImportJob logs (thread-safe)
-        if s.strip():  # Only write non-empty lines
-            try:
-                job = ImportJob.objects.get(pk=self.job_id)
-                job.append_log(s.strip())
-            except ImportJob.DoesNotExist:
-                pass
+    def _periodic_flush(self):
+        """Periodically flush logs to database (every 2 seconds)"""
+        while self.running:
+            time.sleep(2)
+            self.flush_logs_to_db()
+
+    def flush_logs_to_db(self):
+        """Write accumulated logs to database"""
+        with self.lock:
+            if not self.log_lines:
+                return
+
+            lines_to_write = self.log_lines.copy()
+            self.log_lines.clear()
+
+        # Write to DB outside the lock
+        try:
+            job = ImportJob.objects.get(pk=self.job_id)
+            for line in lines_to_write:
+                job.append_log(line)
+        except ImportJob.DoesNotExist:
+            pass
+
+    def close(self):
+        """Stop periodic flush and write remaining logs"""
+        self.running = False
+        if self.flush_thread.is_alive():
+            self.flush_thread.join(timeout=1)
+        self.flush_logs_to_db()
+        super().close()
 
 
 class Command(BaseCommand):
@@ -57,6 +93,7 @@ class Command(BaseCommand):
             cmd_args = [
                 '--competitions', job.competitions,
                 '--seasons', job.seasons,
+                '--job-id', str(job_id),  # Pass job_id for progress tracking
             ]
 
             if job.import_teams and job.import_matches and job.import_players and job.import_standings:
@@ -80,6 +117,9 @@ class Command(BaseCommand):
             # Note: stdout capturing happens through LogCapturingStringIO
             call_command('import_sofascore_complete', *cmd_args, stdout=captured_stdout, stderr=captured_stdout)
 
+            # Close stream (stops periodic flush and writes remaining logs)
+            captured_stdout.close()
+
             # Mark as completed
             job.status = 'completed'
             job.completed_at = timezone.now()
@@ -88,6 +128,9 @@ class Command(BaseCommand):
             job.save()
 
         except Exception as e:
+            # Close stream (even on failure)
+            captured_stdout.close()
+
             # Mark as failed
             job.status = 'failed'
             job.completed_at = timezone.now()

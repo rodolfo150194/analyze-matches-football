@@ -162,6 +162,10 @@ try:
 except ImportError:
     pass
 
+# Media files (User uploaded content - team logos, player photos, etc.)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
