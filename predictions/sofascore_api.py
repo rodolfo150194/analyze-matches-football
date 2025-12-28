@@ -20,7 +20,22 @@ class SofascoreAPI:
     async def _init_browser(self):
         if self.playwright is None:
             self.playwright = await async_playwright().start()
-            self.browser = await self.playwright.chromium.launch(headless=True)
+
+            # Argumentos para VPS/Docker (entornos sin GUI)
+            launch_args = [
+                '--no-sandbox',  # Necesario en entornos sin sandbox
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',  # Evita problemas de memoria compartida
+                '--disable-gpu',  # Desactiva GPU en headless
+                '--disable-software-rasterizer',
+                '--disable-extensions',
+                '--disable-blink-features=AutomationControlled',
+            ]
+
+            self.browser = await self.playwright.chromium.launch(
+                headless=True,
+                args=launch_args
+            )
             self.page = await self.browser.new_page()
 
     async def _wait_if_needed(self):
@@ -401,6 +416,8 @@ class SofascoreAPI:
                                     if status == 'scheduled' and match_status == 'finished':
                                         continue
 
+                                    # Agregar matchday/round al partido
+                                    match['_matchday'] = round_num
                                     all_matches.append(match)
                                     seen_match_ids.add(match_id)
                     except Exception as e:
