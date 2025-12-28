@@ -9,13 +9,14 @@ BASE_URL = "https://www.sofascore.com/api/v1"
 
 
 class SofascoreAPI:
-    def __init__(self, delay_min=5, delay_max=8):
+    def __init__(self, delay_min=8, delay_max=15):
         self.browser = None
         self.page = None
         self.playwright = None
         self.delay_min = delay_min  # Delay mínimo entre peticiones (segundos)
         self.delay_max = delay_max  # Delay máximo entre peticiones (segundos)
         self.last_request_time = 0
+        self.initialized = False
 
     async def _init_browser(self):
         if self.playwright is None:
@@ -36,7 +37,37 @@ class SofascoreAPI:
                 headless=True,
                 args=launch_args
             )
-            self.page = await self.browser.new_page()
+
+            # Crear página con headers realistas
+            self.page = await self.browser.new_page(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                viewport={'width': 1920, 'height': 1080},
+                locale='en-US'
+            )
+
+            # Añadir headers adicionales
+            await self.page.set_extra_http_headers({
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': 'https://www.sofascore.com/',
+                'Origin': 'https://www.sofascore.com',
+                'Connection': 'keep-alive',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-origin',
+            })
+
+            # Visitar la página principal primero para obtener cookies
+            if not self.initialized:
+                try:
+                    print("[INFO] Inicializando sesión en SofaScore...")
+                    await self.page.goto('https://www.sofascore.com/', wait_until='domcontentloaded')
+                    await asyncio.sleep(random.uniform(3, 5))
+                    self.initialized = True
+                    print("[INFO] Sesión inicializada correctamente")
+                except Exception as e:
+                    print(f"[WARN] Error inicializando sesión: {e}")
 
     async def _wait_if_needed(self):
         """Rate limiting: espera entre peticiones"""
