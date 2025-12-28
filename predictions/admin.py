@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from .models import (
     Competition, Team, Match, TeamStats, HeadToHead, Prediction,
     Player, PlayerStats, MatchPlayerStats, ShotEvent, TeamMarketValue, PlayerInjury,
-    MatchIncident
+    MatchIncident, Injury
 )
 
 
@@ -934,3 +934,56 @@ class MatchIncidentAdmin(admin.ModelAdmin):
             return f"{obj.score_home}-{obj.score_away}"
         return '-'
     get_score.short_description = 'Score After'
+
+
+@admin.register(Injury)
+class InjuryAdmin(admin.ModelAdmin):
+    list_display = (
+        'player',
+        'team',
+        'injury_type',
+        'status',
+        'severity',
+        'start_date',
+        'expected_return_date',
+        'is_active',
+    )
+    list_filter = (
+        'status',
+        'severity',
+        'team',
+        ('start_date', admin.DateFieldListFilter),
+        ('expected_return_date', admin.DateFieldListFilter),
+    )
+    search_fields = ('player__name', 'injury_type', 'description')
+    ordering = ('-start_date',)
+    list_select_related = ('player', 'team')
+
+    fieldsets = (
+        ('Player & Team', {
+            'fields': ('player', 'team')
+        }),
+        ('Injury Details', {
+            'fields': (
+                'injury_type',
+                ('status', 'severity'),
+                'description',
+            )
+        }),
+        ('Timeline', {
+            'fields': (
+                'start_date',
+                'expected_return_date',
+                'actual_return_date',
+            )
+        }),
+        ('Metadata', {
+            'fields': (
+                'created_at',
+                'updated_at'
+            ),
+            'classes': ('collapse',)
+        }),
+    )
+
+    readonly_fields = ('created_at', 'updated_at')

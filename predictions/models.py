@@ -931,6 +931,55 @@ class MatchIncident(models.Model):
         return f"{self.match} - {time_str} {self.incident_type}: {player_str}"
 
 
+class Injury(models.Model):
+    """Lesiones de jugadores"""
+    INJURY_STATUS_CHOICES = [
+        ('injured', 'Injured'),
+        ('doubtful', 'Doubtful'),
+        ('recovering', 'Recovering'),
+        ('fit', 'Fit'),
+    ]
+
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='injury_records')
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='team_injuries')
+
+    # Detalles de la lesión
+    injury_type = models.CharField(max_length=200, help_text='Type of injury (e.g., Hamstring, Ankle, Knee)')
+    status = models.CharField(max_length=20, choices=INJURY_STATUS_CHOICES, default='injured')
+
+    # Fechas
+    start_date = models.DateField(null=True, blank=True, help_text='Date when injury occurred')
+    expected_return_date = models.DateField(null=True, blank=True, help_text='Expected return date')
+    actual_return_date = models.DateField(null=True, blank=True, help_text='Actual return date')
+
+    # Información adicional
+    description = models.TextField(null=True, blank=True)
+    severity = models.CharField(max_length=50, null=True, blank=True, help_text='Minor, Moderate, Severe')
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'injuries'
+        verbose_name = 'Injury'
+        verbose_name_plural = 'Injuries'
+        ordering = ['-start_date', '-created_at']
+        indexes = [
+            models.Index(fields=['player', 'status']),
+            models.Index(fields=['team', 'status']),
+            models.Index(fields=['start_date', 'expected_return_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.player.name} - {self.injury_type} ({self.status})"
+
+    @property
+    def is_active(self):
+        """Check if injury is still active"""
+        return self.status in ['injured', 'doubtful', 'recovering']
+
+
 class ImportJob(models.Model):
     """
     Background import job tracking

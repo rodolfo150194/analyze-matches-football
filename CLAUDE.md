@@ -37,11 +37,12 @@ python manage.py import_sofascore_complete --competitions CL --seasons 2024 --te
 python manage.py import_sofascore_complete --competitions PL --seasons 2024 --matches-only --players-only
 
 # Available flags:
-# --all-data: Import teams, matches, match stats, players, player stats, standings
+# --all-data: Import teams, matches, match stats, players, player stats, standings, injuries
 # --teams-only: Import only teams
 # --matches-only: Import only matches with statistics
 # --players-only: Import only players with statistics
 # --standings-only: Import only team standings
+# --injuries-only: Import only player injuries (current injury status per team)
 # --dry-run: Preview what would be imported without saving
 # --force: Reimport existing data
 ```

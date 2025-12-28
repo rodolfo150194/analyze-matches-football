@@ -10,18 +10,20 @@ Imports all available data from SofaScore API in a unified way:
 - Players (linked to unique teams)
 - Player statistics (xG, xA, rating, passes, tackles, etc.)
 - Team standings/classification
+- Player injuries (current injury status per team)
 
 Usage:
     python manage.py import_sofascore_complete --competitions PL --seasons 2024 --all-data
     python manage.py import_sofascore_complete --competitions PL,CL --seasons 2023,2024
     python manage.py import_sofascore_complete --competitions CL --seasons 2024 --teams-only
+    python manage.py import_sofascore_complete --competitions PL --seasons 2024 --injuries-only
 """
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 from asgiref.sync import sync_to_async
-from predictions.models import Competition, Team, Match, Player, PlayerStats, TeamStats, MatchPlayerStats
+from predictions.models import Competition, Team, Match, Player, PlayerStats, TeamStats, MatchPlayerStats, MatchIncident, Injury
 from predictions.sofascore_api import SofascoreAPI
 from predictions.scrapers.utils import safe_int, safe_float
 import asyncio
@@ -175,6 +177,11 @@ class Command(BaseCommand):
             '--standings-only',
             action='store_true',
             help='Only import team standings/classification'
+        )
+        parser.add_argument(
+            '--injuries-only',
+            action='store_true',
+            help='Only import player injuries'
         )
         parser.add_argument(
             '--force',
@@ -466,7 +473,7 @@ class Command(BaseCommand):
                         self.stdout.write(f"      [{idx}/{total_teams}] {team_name} (ID: {team_id})")
 
                     team_result = await self.process_team_global(
-                        team_info, competition, dry_run, force
+                        team_info, competition, dry_run, force, api
                     )
 
                     if team_result == 'created':
@@ -488,7 +495,7 @@ class Command(BaseCommand):
 
         return result
 
-    async def process_team_global(self, team_info, competition, dry_run, force):
+    async def process_team_global(self, team_info, competition, dry_run, force, api=None):
         """
         Process team using GLOBAL api_id lookup (no competition filter)
         This prevents duplicates across competitions
@@ -503,6 +510,23 @@ class Command(BaseCommand):
         if dry_run:
             return 'created'
 
+        # Extract manager from team_info if available
+        manager_name = None
+        manager_data = team_info.get('manager', {})
+        if manager_data:
+            manager_name = manager_data.get('name')
+
+        # If manager not in team_info and api is available, try to get it from team details
+        if not manager_name and api and force:
+            try:
+                team_details = await api.get_equipo_info(team_id)
+                if team_details and 'team' in team_details:
+                    manager_data = team_details['team'].get('manager', {})
+                    if manager_data:
+                        manager_name = manager_data.get('name')
+            except Exception:
+                pass  # Continue without manager if fetch fails
+
         # GLOBAL lookup by api_id (not filtered by competition)
         existing_team = await sync_to_async(
             Team.objects.filter(api_id=team_id).first
@@ -512,32 +536,35 @@ class Command(BaseCommand):
             # Team exists globally - just update if needed
             if force:
                 await sync_to_async(self._update_team)(
-                    existing_team, team_name, short_name
+                    existing_team, team_name, short_name, manager_name
                 )
                 return 'updated'
             return 'skipped'
 
         # Create new team (linked to primary competition)
         await sync_to_async(self._create_team)(
-            competition, team_name, short_name, team_id
+            competition, team_name, short_name, team_id, manager_name
         )
 
         return 'created'
 
-    def _update_team(self, team, name, short_name):
+    def _update_team(self, team, name, short_name, manager=None):
         """Update team info"""
         team.name = name
         team.short_name = short_name
+        if manager:
+            team.manager = manager
         team.save()
 
-    def _create_team(self, competition, name, short_name, api_id):
+    def _create_team(self, competition, name, short_name, api_id, manager=None):
         """Create new team"""
         try:
             Team.objects.create(
                 competition=competition,
                 name=name,
                 short_name=short_name,
-                api_id=api_id
+                api_id=api_id,
+                manager=manager
             )
         except Exception:
             pass  # Ignore if already exists due to race condition
@@ -702,6 +729,12 @@ class Command(BaseCommand):
         else:
             utc_date = None
 
+        # Extract matchday/round from roundInfo or custom _matchday field
+        matchday = match_info.get('_matchday')  # Set by get_season_matches
+        if not matchday:
+            round_info = match_info.get('roundInfo', {})
+            matchday = round_info.get('round')
+
         return {
             'status': mapped_status,
             'utc_date': utc_date,
@@ -709,6 +742,7 @@ class Command(BaseCommand):
             'away_score': safe_int(away_score),
             'home_score_ht': safe_int(ht_home),
             'away_score_ht': safe_int(ht_away),
+            'matchday': safe_int(matchday),
         }
 
     def _update_match(self, match, data):
@@ -740,6 +774,29 @@ class Command(BaseCommand):
             has_match_stats = False
             has_player_stats = False
 
+            # Extract referee and venue from match details
+            if 'details' in match_data and match_data['details']:
+                details = match_data['details']
+                event_data = details.get('event', {})
+
+                # Extract referee
+                referee_data = event_data.get('referee', {})
+                if referee_data:
+                    referee_name = referee_data.get('name')
+                    if referee_name:
+                        await sync_to_async(self._update_match_details)(
+                            match, {'referee': referee_name}
+                        )
+
+                # Extract venue
+                venue_data = event_data.get('venue', {})
+                if venue_data:
+                    venue_name = venue_data.get('stadium', {}).get('name')
+                    if venue_name:
+                        await sync_to_async(self._update_match_details)(
+                            match, {'venue': venue_name}
+                        )
+
             # Import match-level statistics
             if 'statistics' in match_data:
                 statistics = match_data.get('statistics', [])
@@ -755,6 +812,14 @@ class Command(BaseCommand):
                 player_count = await self.import_match_player_stats(match, lineups)
                 if player_count > 0:
                     has_player_stats = True
+
+            # Import match incidents (goals, cards, substitutions)
+            try:
+                incidents_count = await self.import_match_incidents(api, match, event_id)
+                if incidents_count > 0:
+                    has_match_stats = True
+            except Exception:
+                pass  # Continue if incidents fetch fails
 
             return has_match_stats or has_player_stats
 
@@ -815,6 +880,13 @@ class Command(BaseCommand):
     def _update_match_stats(self, match, stats):
         """Update match with statistics"""
         for key, value in stats.items():
+            if value is not None and hasattr(match, key):
+                setattr(match, key, value)
+        match.save()
+
+    def _update_match_details(self, match, details):
+        """Update match with additional details (referee, venue, etc.)"""
+        for key, value in details.items():
             if value is not None and hasattr(match, key):
                 setattr(match, key, value)
         match.save()
@@ -1176,3 +1248,270 @@ class Command(BaseCommand):
                 **stats_data
             }
         )
+
+    async def import_match_incidents(self, api, match, event_id):
+        """Import match incidents (goals, cards, substitutions, VAR)"""
+        try:
+            incidents_data = await api.get_partido_incidentes(event_id)
+
+            if not incidents_data or 'incidents' not in incidents_data:
+                return 0
+
+            incidents_list = incidents_data.get('incidents', [])
+            incidents_created = 0
+
+            for incident_data in incidents_list:
+                try:
+                    incident_created = await self.process_match_incident(
+                        match, incident_data
+                    )
+                    if incident_created:
+                        incidents_created += 1
+                except Exception:
+                    continue  # Skip problematic incidents
+
+            return incidents_created
+
+        except Exception:
+            return 0
+
+    async def process_match_incident(self, match, incident_data):
+        """Process and save a single match incident"""
+        incident_type = incident_data.get('incidentType', '').lower()
+
+        # Map SofaScore incident types to our model choices
+        type_mapping = {
+            'goal': 'goal',
+            'owngoal': 'ownGoal',
+            'penalty': 'penalty',
+            'missedpenalty': 'missedPenalty',
+            'yellowcard': 'yellowCard',
+            'redcard': 'redCard',
+            'yellowredcard': 'yellowRedCard',
+            'substitution': 'substitution',
+            'injurytime': 'injuryTime',
+            'var': 'var',
+        }
+
+        mapped_type = type_mapping.get(incident_type)
+        if not mapped_type:
+            return False  # Skip unknown types
+
+        # Extract basic incident info
+        time = safe_int(incident_data.get('time'))
+        time_added = safe_int(incident_data.get('addedTime'))
+
+        # Get team info
+        team_data = incident_data.get('team', {})
+        team_id = team_data.get('id')
+
+        # Find team
+        team = await sync_to_async(
+            Team.objects.filter(api_id=team_id).first
+        )()
+
+        # Extract player info
+        player = None
+        player_data = incident_data.get('player', {})
+        if player_data:
+            player_id = player_data.get('id')
+            if player_id:
+                player = await sync_to_async(
+                    Player.objects.filter(sofascore_id=player_id).first
+                )()
+
+        # Extract assist player (for goals)
+        assist_player = None
+        if 'assist1' in incident_data:
+            assist_data = incident_data.get('assist1', {})
+            assist_id = assist_data.get('id')
+            if assist_id:
+                assist_player = await sync_to_async(
+                    Player.objects.filter(sofascore_id=assist_id).first
+                )()
+
+        # Extract substitution players
+        player_in = None
+        player_out = None
+        if mapped_type == 'substitution':
+            # player_out is the main player
+            player_out = player
+
+            # player_in from playerIn field
+            player_in_data = incident_data.get('playerIn', {})
+            if player_in_data:
+                player_in_id = player_in_data.get('id')
+                if player_in_id:
+                    player_in = await sync_to_async(
+                        Player.objects.filter(sofascore_id=player_in_id).first
+                    )()
+
+        # Extract score after incident (for goals)
+        score_home = None
+        score_away = None
+        if 'homeScore' in incident_data and 'awayScore' in incident_data:
+            score_home = safe_int(incident_data.get('homeScore'))
+            score_away = safe_int(incident_data.get('awayScore'))
+
+        # Create or update incident
+        incident_obj = await sync_to_async(self._create_match_incident)(
+            match=match,
+            team=team,
+            player=player,
+            incident_type=mapped_type,
+            time=time,
+            time_added=time_added,
+            score_home=score_home,
+            score_away=score_away,
+            assist_player=assist_player,
+            player_in=player_in,
+            player_out=player_out,
+        )
+
+        return incident_obj is not None
+
+    def _create_match_incident(self, match, team, player, incident_type, time,
+                                time_added, score_home, score_away, assist_player,
+                                player_in, player_out):
+        """Create match incident"""
+        try:
+            incident = MatchIncident.objects.create(
+                match=match,
+                team=team,
+                player=player,
+                incident_type=incident_type,
+                time=time,
+                time_added=time_added,
+                score_home=score_home,
+                score_away=score_away,
+                assist_player=assist_player,
+                player_in=player_in,
+                player_out=player_out,
+            )
+            return incident
+        except Exception:
+            return None
+
+    async def import_team_injuries(self, api, team):
+        """Import injuries for a specific team"""
+        try:
+            injuries_data = await api.get_equipo_lesiones(team.api_id)
+
+            if not injuries_data or 'players' not in injuries_data:
+                return 0
+
+            players_list = injuries_data.get('players', [])
+            injuries_created = 0
+
+            for player_data in players_list:
+                try:
+                    injury_created = await self.process_player_injury(
+                        team, player_data
+                    )
+                    if injury_created:
+                        injuries_created += 1
+                except Exception:
+                    continue  # Skip problematic injuries
+
+            return injuries_created
+
+        except Exception:
+            return 0
+
+    async def process_player_injury(self, team, player_data):
+        """Process and save a single player injury"""
+        player_info = player_data.get('player', {})
+        player_id = player_info.get('id')
+        player_name = player_info.get('name', 'Unknown')
+
+        if not player_id:
+            return False
+
+        # Find player by sofascore_id
+        player = await sync_to_async(
+            Player.objects.filter(sofascore_id=player_id).first
+        )()
+
+        # If player doesn't exist, create basic player record
+        if not player:
+            player = await sync_to_async(self._create_player)(
+                player_name, player_id, team
+            )
+
+        # Extract injury details
+        injury_type = player_data.get('reason')  # e.g., "Knee Injury", "Hamstring"
+        expected_return = player_data.get('expectedReturnDate')  # Unix timestamp or date string
+
+        # Map SofaScore injury status to our model
+        # SofaScore may have different status codes
+        status = 'injured'  # Default status
+
+        # Parse expected return date if available
+        expected_return_date = None
+        if expected_return:
+            try:
+                if isinstance(expected_return, int):
+                    # Unix timestamp
+                    expected_return_date = datetime.utcfromtimestamp(expected_return).date()
+                elif isinstance(expected_return, str):
+                    # Try parsing string date
+                    expected_return_date = datetime.strptime(expected_return, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                pass
+
+        # Determine severity based on expected return date
+        severity = None
+        if expected_return_date:
+            days_out = (expected_return_date - datetime.now().date()).days
+            if days_out <= 7:
+                severity = 'Minor'
+            elif days_out <= 30:
+                severity = 'Moderate'
+            else:
+                severity = 'Severe'
+
+        # Create or update injury
+        injury_obj = await sync_to_async(self._create_or_update_injury)(
+            player=player,
+            team=team,
+            injury_type=injury_type,
+            status=status,
+            expected_return_date=expected_return_date,
+            severity=severity,
+        )
+
+        return injury_obj is not None
+
+    def _create_or_update_injury(self, player, team, injury_type, status,
+                                  expected_return_date, severity):
+        """Create or update player injury record"""
+        try:
+            # Check if there's an active injury for this player
+            active_injury = Injury.objects.filter(
+                player=player,
+                status__in=['injured', 'doubtful', 'recovering']
+            ).first()
+
+            if active_injury:
+                # Update existing injury
+                if injury_type:
+                    active_injury.injury_type = injury_type
+                active_injury.status = status
+                active_injury.expected_return_date = expected_return_date
+                active_injury.severity = severity
+                active_injury.save()
+                return active_injury
+            else:
+                # Create new injury
+                injury = Injury.objects.create(
+                    player=player,
+                    team=team,
+                    injury_type=injury_type or 'Unknown',
+                    status=status,
+                    start_date=datetime.now().date(),
+                    expected_return_date=expected_return_date,
+                    severity=severity,
+                )
+                return injury
+        except Exception:
+            return None
