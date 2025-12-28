@@ -22,11 +22,11 @@ Usage:
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
-from asgiref.sync import sync_to_async
+
 from predictions.models import Competition, Team, Match, Player, PlayerStats, TeamStats, MatchPlayerStats, MatchIncident, Injury
 from predictions.sofascore_api import SofascoreAPI
 from predictions.scrapers.utils import safe_int, safe_float
-import asyncio
+
 from datetime import datetime
 import pytz
 import json
@@ -125,18 +125,17 @@ class Command(BaseCommand):
         super().__init__(*args, **kwargs)
         self.job_id = None
 
-    async def update_progress(self, percentage, step):
+    def update_progress(self, percentage, step):
         """Update progress in ImportJob if job_id is set"""
         if self.job_id:
             try:
                 from predictions.models import ImportJob
 
-                # Use sync_to_async to call Django ORM from async context
                 def _update():
                     job = ImportJob.objects.get(pk=self.job_id)
                     job.update_progress(percentage, step)
 
-                await sync_to_async(_update)()
+                _update)()
             except ImportJob.DoesNotExist:
                 pass
 
@@ -249,18 +248,17 @@ class Command(BaseCommand):
         self.stdout.write("")
 
         # Run async import
-        asyncio.run(self.import_complete_async(
             competitions, seasons, force, dry_run,
             import_teams, import_matches, import_players, import_standings
         ))
 
-    async def import_complete_async(self, competitions, seasons, force, dry_run,
+    def import_complete_async(self, competitions, seasons, force, dry_run,
                                    import_teams, import_matches, import_players, import_standings):
         """Async wrapper for complete import"""
         api = SofascoreAPI()
 
         # Initialize progress
-        await self.update_progress(0, "Iniciando importacion...")
+        self.update_progress(0, "Iniciando importacion...")
 
         # Global counters
         total_stats = {
@@ -287,7 +285,7 @@ class Command(BaseCommand):
                     self.stdout.write(f"{comp_code} - Temporada {season}/{season + 1} ({current_item}/{total_items})")
                     self.stdout.write("=" * 80)
 
-                    result = await self.import_season_complete(
+                    result = self.import_season_complete(
                         api, comp_code, season, force, dry_run,
                         import_teams, import_matches, import_players, import_standings
                     )
@@ -297,10 +295,10 @@ class Command(BaseCommand):
                             total_stats[key] += result.get(key, 0)
 
         finally:
-            await api.close()
+            api.close()
 
         # Summary
-        await self.update_progress(100, "Importacion completada!")
+        self.update_progress(100, "Importacion completada!")
         self.stdout.write("\n" + "=" * 80)
         self.stdout.write(self.style.SUCCESS('RESUMEN TOTAL'))
         self.stdout.write("=" * 80)
@@ -324,13 +322,13 @@ class Command(BaseCommand):
 
         self.stdout.write("=" * 80)
 
-    async def import_season_complete(self, api, comp_code, season, force, dry_run,
+    def import_season_complete(self, api, comp_code, season, force, dry_run,
                                     import_teams, import_matches, import_players, import_standings):
         """Import all data for one competition/season"""
 
         try:
             # Get competition
-            competition = await sync_to_async(Competition.objects.get)(code=comp_code)
+            competition = Competition.objects.get)(code=comp_code)
         except Competition.DoesNotExist:
             self.stdout.write(
                 self.style.ERROR(f"[ERROR] Competicion {comp_code} no encontrada en BD")
@@ -358,7 +356,7 @@ class Command(BaseCommand):
 
         # Update competition with SofaScore ID
         if not dry_run:
-            await sync_to_async(self._update_competition)(competition, tournament_id)
+            self._update_competition)(competition, tournament_id)
 
         result = {
             'teams_created': 0,
@@ -375,8 +373,8 @@ class Command(BaseCommand):
         # 1. Import teams
         if import_teams:
             self.stdout.write("\n[1/4] EQUIPOS")
-            await self.update_progress(10, f"Importando equipos: {comp_code} {season}")
-            teams_result = await self.import_teams(
+            self.update_progress(10, f"Importando equipos: {comp_code} {season}")
+            teams_result = self.import_teams(
                 api, competition, tournament_id, season_id, season, force, dry_run
             )
             result['teams_created'] = teams_result.get('teams_created', 0)
@@ -391,8 +389,8 @@ class Command(BaseCommand):
         # 2. Import matches with statistics
         if import_matches:
             self.stdout.write("\n[2/4] PARTIDOS + ESTADISTICAS")
-            await self.update_progress(30, f"Importando partidos: {comp_code} {season}")
-            matches_result = await self.import_matches_with_stats(
+            self.update_progress(30, f"Importando partidos: {comp_code} {season}")
+            matches_result = self.import_matches_with_stats(
                 api, competition, tournament_id, season_id, season, force, dry_run
             )
             result['matches_created'] = matches_result.get('matches_created', 0)
@@ -409,8 +407,8 @@ class Command(BaseCommand):
         # 3. Import players and player stats
         if import_players:
             self.stdout.write("\n[3/4] JUGADORES + ESTADISTICAS")
-            await self.update_progress(60, f"Importando jugadores: {comp_code} {season}")
-            players_result = await self.import_players_with_stats(
+            self.update_progress(60, f"Importando jugadores: {comp_code} {season}")
+            players_result = self.import_players_with_stats(
                 api, competition, tournament_id, season_id, season, force, dry_run
             )
             result['players_created'] = players_result.get('players_created', 0)
@@ -427,8 +425,8 @@ class Command(BaseCommand):
         # 4. Import team standings/classification
         if import_standings:
             self.stdout.write("\n[4/4] CLASIFICACION/TABLA")
-            await self.update_progress(85, f"Importando clasificacion: {comp_code} {season}")
-            standings_result = await self.import_standings(
+            self.update_progress(85, f"Importando clasificacion: {comp_code} {season}")
+            standings_result = self.import_standings(
                 api, competition, tournament_id, season_id, season, force, dry_run
             )
             result['standings_imported'] = standings_result.get('teams_processed', 0)
@@ -438,7 +436,7 @@ class Command(BaseCommand):
                 )
             )
 
-        await self.update_progress(95, f"Completado: {comp_code} {season}")
+        self.update_progress(95, f"Completado: {comp_code} {season}")
         return result
 
     def _update_competition(self, competition, tournament_id):
@@ -447,13 +445,13 @@ class Command(BaseCommand):
             competition.api_id = str(tournament_id)
             competition.save()
 
-    async def import_teams(self, api, competition, tournament_id, season_id,
+    def import_teams(self, api, competition, tournament_id, season_id,
                           season, force, dry_run):
         """Import teams - avoiding duplicates using global api_id lookup"""
         result = {'teams_created': 0, 'teams_updated': 0}
 
         try:
-            teams_data = await api.get_season_teams(tournament_id, season_id)
+            teams_data = api.get_season_teams(tournament_id, season_id)
 
             if not teams_data or 'teams' not in teams_data:
                 self.stdout.write(self.style.WARNING("[WARN] No teams found"))
@@ -472,7 +470,7 @@ class Command(BaseCommand):
                     if idx % 10 == 0 or idx == 1 or idx == total_teams:
                         self.stdout.write(f"      [{idx}/{total_teams}] {team_name} (ID: {team_id})")
 
-                    team_result = await self.process_team_global(
+                    team_result = self.process_team_global(
                         team_info, competition, dry_run, force, api
                     )
 
@@ -495,7 +493,7 @@ class Command(BaseCommand):
 
         return result
 
-    async def process_team_global(self, team_info, competition, dry_run, force, api=None):
+    def process_team_global(self, team_info, competition, dry_run, force, api=None):
         """
         Process team using GLOBAL api_id lookup (no competition filter)
         This prevents duplicates across competitions
@@ -519,7 +517,7 @@ class Command(BaseCommand):
         # If manager not in team_info and api is available, try to get it from team details
         if not manager_name and api and force:
             try:
-                team_details = await api.get_equipo_info(team_id)
+                team_details = api.get_equipo_info(team_id)
                 if team_details and 'team' in team_details:
                     manager_data = team_details['team'].get('manager', {})
                     if manager_data:
@@ -528,21 +526,21 @@ class Command(BaseCommand):
                 pass  # Continue without manager if fetch fails
 
         # GLOBAL lookup by api_id (not filtered by competition)
-        existing_team = await sync_to_async(
+        existing_team = 
             Team.objects.filter(api_id=team_id).first
         )()
 
         if existing_team:
             # Team exists globally - just update if needed
             if force:
-                await sync_to_async(self._update_team)(
+                self._update_team)(
                     existing_team, team_name, short_name, manager_name
                 )
                 return 'updated'
             return 'skipped'
 
         # Create new team (linked to primary competition)
-        await sync_to_async(self._create_team)(
+        self._create_team)(
             competition, team_name, short_name, team_id, manager_name
         )
 
@@ -569,13 +567,13 @@ class Command(BaseCommand):
         except Exception:
             pass  # Ignore if already exists due to race condition
 
-    async def import_matches_with_stats(self, api, competition, tournament_id, season_id,
+    def import_matches_with_stats(self, api, competition, tournament_id, season_id,
                                        season, force, dry_run):
         """Import matches with statistics"""
         result = {'matches_created': 0, 'matches_updated': 0, 'stats_imported': 0}
 
         try:
-            matches_data = await api.get_season_matches(tournament_id, season_id, status='all')
+            matches_data = api.get_season_matches(tournament_id, season_id, status='all')
 
             if not matches_data:
                 return result
@@ -597,7 +595,7 @@ class Command(BaseCommand):
                             f"(ID: {match_id}, Status: {match_status})"
                         )
 
-                    match_result, has_stats = await self.process_match_with_stats(
+                    match_result, has_stats = self.process_match_with_stats(
                         match_info, competition, season, dry_run, force, api
                     )
 
@@ -646,7 +644,7 @@ class Command(BaseCommand):
 
         return result
 
-    async def process_match_with_stats(self, match_info, competition, season,
+    def process_match_with_stats(self, match_info, competition, season,
                                       dry_run, force, api):
         """Process single match with statistics"""
         event_id = match_info.get('id')
@@ -660,11 +658,11 @@ class Command(BaseCommand):
             return 'skipped', False
 
         # Find teams by GLOBAL api_id
-        home_team = await sync_to_async(
+        home_team = 
             Team.objects.filter(api_id=home_team_id).first
         )()
 
-        away_team = await sync_to_async(
+        away_team = 
             Team.objects.filter(api_id=away_team_id).first
         )()
 
@@ -678,19 +676,19 @@ class Command(BaseCommand):
         match_data = self.extract_match_data(match_info)
 
         # Check if match exists
-        existing_match = await sync_to_async(
+        existing_match = 
             Match.objects.filter(api_id=event_id).first
         )()
 
         match_obj = None
         if existing_match:
             if force:
-                await sync_to_async(self._update_match)(existing_match, match_data)
+                self._update_match)(existing_match, match_data)
                 match_obj = existing_match
             else:
                 return 'skipped', False
         else:
-            match_obj = await sync_to_async(self._create_match)(
+            match_obj = self._create_match)(
                 competition, home_team, away_team, season, event_id, match_data
             )
 
@@ -698,7 +696,7 @@ class Command(BaseCommand):
         has_stats = False
         if match_obj and match_info.get('status', {}).get('type') == 'finished':
             try:
-                has_stats = await self.import_match_stats(api, match_obj, event_id)
+                has_stats = self.import_match_stats(api, match_obj, event_id)
             except Exception:
                 pass
 
@@ -763,10 +761,10 @@ class Command(BaseCommand):
             **data
         )
 
-    async def import_match_stats(self, api, match, event_id):
+    def import_match_stats(self, api, match, event_id):
         """Import match statistics and player statistics"""
         try:
-            match_data = await api.get_match_complete_data(event_id)
+            match_data = api.get_match_complete_data(event_id)
 
             if not match_data:
                 return False
@@ -784,7 +782,7 @@ class Command(BaseCommand):
                 if referee_data:
                     referee_name = referee_data.get('name')
                     if referee_name:
-                        await sync_to_async(self._update_match_details)(
+                        self._update_match_details)(
                             match, {'referee': referee_name}
                         )
 
@@ -793,7 +791,7 @@ class Command(BaseCommand):
                 if venue_data:
                     venue_name = venue_data.get('stadium', {}).get('name')
                     if venue_name:
-                        await sync_to_async(self._update_match_details)(
+                        self._update_match_details)(
                             match, {'venue': venue_name}
                         )
 
@@ -803,19 +801,19 @@ class Command(BaseCommand):
                 stats = self.extract_match_statistics(statistics)
 
                 if stats:
-                    await sync_to_async(self._update_match_stats)(match, stats)
+                    self._update_match_stats)(match, stats)
                     has_match_stats = True
 
             # Import player statistics from lineups
             if 'lineups' in match_data:
                 lineups = match_data.get('lineups', {})
-                player_count = await self.import_match_player_stats(match, lineups)
+                player_count = self.import_match_player_stats(match, lineups)
                 if player_count > 0:
                     has_player_stats = True
 
             # Import match incidents (goals, cards, substitutions)
             try:
-                incidents_count = await self.import_match_incidents(api, match, event_id)
+                incidents_count = self.import_match_incidents(api, match, event_id)
                 if incidents_count > 0:
                     has_match_stats = True
             except Exception:
@@ -891,14 +889,14 @@ class Command(BaseCommand):
                 setattr(match, key, value)
         match.save()
 
-    async def import_players_with_stats(self, api, competition, tournament_id, season_id,
+    def import_players_with_stats(self, api, competition, tournament_id, season_id,
                                        season, force, dry_run):
         """Import players and their statistics"""
         result = {'players_created': 0, 'players_updated': 0, 'stats_created': 0}
 
         try:
             # Get all player stats
-            players_data = await api.get_all_league_player_stats(
+            players_data = api.get_all_league_player_stats(
                 tournament_id, season_id, accumulation='total'
             )
 
@@ -919,7 +917,7 @@ class Command(BaseCommand):
                             f"      [{idx}/{total_players}] {player_name} ({team_name})"
                         )
 
-                    player_result = await self.process_player_with_stats(
+                    player_result = self.process_player_with_stats(
                         player_data, competition, season, dry_run, force
                     )
 
@@ -942,7 +940,7 @@ class Command(BaseCommand):
 
         return result
 
-    async def process_player_with_stats(self, player_data, competition, season,
+    def process_player_with_stats(self, player_data, competition, season,
                                        dry_run, force):
         """Process player and create stats"""
         player_info = player_data.get('player', {})
@@ -956,7 +954,7 @@ class Command(BaseCommand):
             return 'skipped'
 
         # Find team by GLOBAL api_id
-        team = await sync_to_async(
+        team = 
             Team.objects.filter(api_id=team_id).first
         )()
 
@@ -967,7 +965,7 @@ class Command(BaseCommand):
             return 'created'
 
         # Get or create player
-        player, player_created = await self.get_or_create_player(
+        player, player_created = self.get_or_create_player(
             player_name, player_id, team
         )
 
@@ -977,16 +975,16 @@ class Command(BaseCommand):
         # Create/update player stats
         stats_data = self.extract_player_stats(player_data)
 
-        await sync_to_async(self._update_or_create_player_stats)(
+        self._update_or_create_player_stats)(
             player, team, competition, season, stats_data
         )
 
         return 'created' if player_created else 'updated'
 
-    async def get_or_create_player(self, player_name, player_id, team):
+    def get_or_create_player(self, player_name, player_id, team):
         """Get or create player"""
         if player_id:
-            existing = await sync_to_async(
+            existing = 
                 Player.objects.filter(sofascore_id=player_id).first
             )()
 
@@ -994,7 +992,7 @@ class Command(BaseCommand):
                 return existing, False
 
         # Create new player
-        player = await sync_to_async(self._create_player)(
+        player = self._create_player)(
             player_name, player_id, team
         )
 
@@ -1043,14 +1041,14 @@ class Command(BaseCommand):
             }
         )
 
-    async def import_standings(self, api, competition, tournament_id, season_id,
+    def import_standings(self, api, competition, tournament_id, season_id,
                               season, force, dry_run):
         """Import team standings/classification"""
         result = {'teams_processed': 0}
 
         try:
             # Get standings data
-            teams_data = await api.get_season_teams(tournament_id, season_id)
+            teams_data = api.get_season_teams(tournament_id, season_id)
 
             if not teams_data or 'standings' not in teams_data:
                 return result
@@ -1068,7 +1066,7 @@ class Command(BaseCommand):
 
         return result
 
-    async def import_match_player_stats(self, match, lineups):
+    def import_match_player_stats(self, match, lineups):
         """Import player statistics from match lineups"""
         if not lineups:
             return 0
@@ -1086,21 +1084,21 @@ class Command(BaseCommand):
 
         # Process home team players
         if home_lineup:
-            home_count = await self.process_team_lineup(
+            home_count = self.process_team_lineup(
                 match, home_team, home_lineup
             )
             players_imported += home_count
 
         # Process away team players
         if away_lineup:
-            away_count = await self.process_team_lineup(
+            away_count = self.process_team_lineup(
                 match, away_team, away_lineup
             )
             players_imported += away_count
 
         return players_imported
 
-    async def process_team_lineup(self, match, team, lineup_data):
+    def process_team_lineup(self, match, team, lineup_data):
         """Process lineup for one team"""
         players_count = 0
 
@@ -1131,14 +1129,14 @@ class Command(BaseCommand):
                     continue
 
                 # Find player by sofascore_id
-                player = await sync_to_async(
+                player = 
                     Player.objects.filter(sofascore_id=player_id).first
                 )()
 
                 # If player doesn't exist, create it
                 if not player:
                     player_name = player_info.get('name', 'Unknown')
-                    player = await sync_to_async(self._create_player)(
+                    player = self._create_player)(
                         player_name, player_id, team
                     )
 
@@ -1146,7 +1144,7 @@ class Command(BaseCommand):
                 stats_data = self.extract_player_match_stats(player_entry, team)
 
                 # Save match player stats
-                await sync_to_async(self._create_or_update_match_player_stats)(
+                self._create_or_update_match_player_stats)(
                     match, player, team, stats_data
                 )
 
@@ -1249,10 +1247,10 @@ class Command(BaseCommand):
             }
         )
 
-    async def import_match_incidents(self, api, match, event_id):
+    def import_match_incidents(self, api, match, event_id):
         """Import match incidents (goals, cards, substitutions, VAR)"""
         try:
-            incidents_data = await api.get_partido_incidentes(event_id)
+            incidents_data = api.get_partido_incidentes(event_id)
 
             if not incidents_data or 'incidents' not in incidents_data:
                 return 0
@@ -1262,7 +1260,7 @@ class Command(BaseCommand):
 
             for incident_data in incidents_list:
                 try:
-                    incident_created = await self.process_match_incident(
+                    incident_created = self.process_match_incident(
                         match, incident_data
                     )
                     if incident_created:
@@ -1275,7 +1273,7 @@ class Command(BaseCommand):
         except Exception:
             return 0
 
-    async def process_match_incident(self, match, incident_data):
+    def process_match_incident(self, match, incident_data):
         """Process and save a single match incident"""
         incident_type = incident_data.get('incidentType', '').lower()
 
@@ -1306,7 +1304,7 @@ class Command(BaseCommand):
         team_id = team_data.get('id')
 
         # Find team
-        team = await sync_to_async(
+        team = 
             Team.objects.filter(api_id=team_id).first
         )()
 
@@ -1316,7 +1314,7 @@ class Command(BaseCommand):
         if player_data:
             player_id = player_data.get('id')
             if player_id:
-                player = await sync_to_async(
+                player = 
                     Player.objects.filter(sofascore_id=player_id).first
                 )()
 
@@ -1326,7 +1324,7 @@ class Command(BaseCommand):
             assist_data = incident_data.get('assist1', {})
             assist_id = assist_data.get('id')
             if assist_id:
-                assist_player = await sync_to_async(
+                assist_player = 
                     Player.objects.filter(sofascore_id=assist_id).first
                 )()
 
@@ -1342,7 +1340,7 @@ class Command(BaseCommand):
             if player_in_data:
                 player_in_id = player_in_data.get('id')
                 if player_in_id:
-                    player_in = await sync_to_async(
+                    player_in = 
                         Player.objects.filter(sofascore_id=player_in_id).first
                     )()
 
@@ -1354,7 +1352,7 @@ class Command(BaseCommand):
             score_away = safe_int(incident_data.get('awayScore'))
 
         # Create or update incident
-        incident_obj = await sync_to_async(self._create_match_incident)(
+        incident_obj = self._create_match_incident)(
             match=match,
             team=team,
             player=player,
@@ -1392,10 +1390,10 @@ class Command(BaseCommand):
         except Exception:
             return None
 
-    async def import_team_injuries(self, api, team):
+    def import_team_injuries(self, api, team):
         """Import injuries for a specific team"""
         try:
-            injuries_data = await api.get_equipo_lesiones(team.api_id)
+            injuries_data = api.get_equipo_lesiones(team.api_id)
 
             if not injuries_data or 'players' not in injuries_data:
                 return 0
@@ -1405,7 +1403,7 @@ class Command(BaseCommand):
 
             for player_data in players_list:
                 try:
-                    injury_created = await self.process_player_injury(
+                    injury_created = self.process_player_injury(
                         team, player_data
                     )
                     if injury_created:
@@ -1418,7 +1416,7 @@ class Command(BaseCommand):
         except Exception:
             return 0
 
-    async def process_player_injury(self, team, player_data):
+    def process_player_injury(self, team, player_data):
         """Process and save a single player injury"""
         player_info = player_data.get('player', {})
         player_id = player_info.get('id')
@@ -1428,13 +1426,13 @@ class Command(BaseCommand):
             return False
 
         # Find player by sofascore_id
-        player = await sync_to_async(
+        player = 
             Player.objects.filter(sofascore_id=player_id).first
         )()
 
         # If player doesn't exist, create basic player record
         if not player:
-            player = await sync_to_async(self._create_player)(
+            player = self._create_player)(
                 player_name, player_id, team
             )
 
@@ -1471,7 +1469,7 @@ class Command(BaseCommand):
                 severity = 'Severe'
 
         # Create or update injury
-        injury_obj = await sync_to_async(self._create_or_update_injury)(
+        injury_obj = self._create_or_update_injury)(
             player=player,
             team=team,
             injury_type=injury_type,

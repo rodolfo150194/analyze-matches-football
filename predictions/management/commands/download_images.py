@@ -19,8 +19,8 @@ from django.core.management.base import BaseCommand
 from django.conf import settings
 from predictions.models import Team, Player
 from predictions.sofascore_api import SofascoreAPI
-from asgiref.sync import sync_to_async
-import asyncio
+
+
 import os
 from pathlib import Path
 import aiofiles
@@ -99,11 +99,10 @@ class Command(BaseCommand):
         self.stdout.write("")
 
         # Run async download
-        asyncio.run(self.download_images_async(
             download_teams, download_players, force, dry_run, limit
         ))
 
-    async def download_images_async(self, download_teams, download_players,
+    def download_images_async(self, download_teams, download_players,
                                     force, dry_run, limit):
         """Main async download function"""
         api = SofascoreAPI(delay_min=1, delay_max=2)  # Shorter delays for images
@@ -111,7 +110,7 @@ class Command(BaseCommand):
         try:
             # Create media directories
             if not dry_run:
-                await self.create_media_directories()
+                self.create_media_directories()
 
             stats = {
                 'teams_downloaded': 0,
@@ -128,7 +127,7 @@ class Command(BaseCommand):
                 self.stdout.write("LOGOS DE EQUIPOS")
                 self.stdout.write("=" * 80)
 
-                team_stats = await self.download_team_logos(
+                team_stats = self.download_team_logos(
                     api, force, dry_run, limit
                 )
                 stats['teams_downloaded'] = team_stats['downloaded']
@@ -141,7 +140,7 @@ class Command(BaseCommand):
                 self.stdout.write("FOTOS DE JUGADORES")
                 self.stdout.write("=" * 80)
 
-                player_stats = await self.download_player_photos(
+                player_stats = self.download_player_photos(
                     api, force, dry_run, limit
                 )
                 stats['players_downloaded'] = player_stats['downloaded']
@@ -149,7 +148,7 @@ class Command(BaseCommand):
                 stats['players_failed'] = player_stats['failed']
 
         finally:
-            await api.close()
+            api.close()
 
         # Summary
         self.stdout.write("\n" + "=" * 80)
@@ -168,7 +167,7 @@ class Command(BaseCommand):
 
         self.stdout.write("=" * 80)
 
-    async def create_media_directories(self):
+    def create_media_directories(self):
         """Create media directories if they don't exist"""
         teams_dir = Path(settings.MEDIA_ROOT) / 'teams'
         players_dir = Path(settings.MEDIA_ROOT) / 'players'
@@ -176,12 +175,12 @@ class Command(BaseCommand):
         teams_dir.mkdir(parents=True, exist_ok=True)
         players_dir.mkdir(parents=True, exist_ok=True)
 
-    async def download_team_logos(self, api, force, dry_run, limit):
+    def download_team_logos(self, api, force, dry_run, limit):
         """Download all team logos"""
         stats = {'downloaded': 0, 'skipped': 0, 'failed': 0}
 
         # Get teams with api_id
-        teams = await sync_to_async(list)(
+        teams = list)(
             Team.objects.filter(api_id__isnull=False).order_by('name')
         )
 
@@ -218,11 +217,11 @@ class Command(BaseCommand):
 
                 # Download image
                 image_url = f"https://api.sofascore.com/api/v1/team/{team_id}/image"
-                success = await self.download_image(api, image_url, full_path)
+                success = self.download_image(api, image_url, full_path)
 
                 if success:
                     # Update database
-                    await sync_to_async(self._update_team_crest)(team, relative_path)
+                    self._update_team_crest)(team, relative_path)
                     stats['downloaded'] += 1
 
                     if idx % 10 == 0 or idx == 1 or idx == total:
@@ -249,12 +248,12 @@ class Command(BaseCommand):
 
         return stats
 
-    async def download_player_photos(self, api, force, dry_run, limit):
+    def download_player_photos(self, api, force, dry_run, limit):
         """Download all player photos"""
         stats = {'downloaded': 0, 'skipped': 0, 'failed': 0}
 
         # Get players with sofascore_id
-        players = await sync_to_async(list)(
+        players = list)(
             Player.objects.filter(sofascore_id__isnull=False).order_by('name')
         )
 
@@ -292,11 +291,11 @@ class Command(BaseCommand):
 
                 # Download image
                 image_url = f"https://api.sofascore.com/api/v1/player/{player_id}/image"
-                success = await self.download_image(api, image_url, full_path)
+                success = self.download_image(api, image_url, full_path)
 
                 if success:
                     # Update database
-                    await sync_to_async(self._update_player_photo)(player, relative_path)
+                    self._update_player_photo)(player, relative_path)
                     stats['downloaded'] += 1
 
                     if idx % 50 == 0 or idx == 1 or idx == total:
@@ -324,24 +323,24 @@ class Command(BaseCommand):
 
         return stats
 
-    async def download_image(self, api, url, output_path):
+    def download_image(self, api, url, output_path):
         """
         Download a single image from SofaScore
         Returns True if successful, False otherwise
         """
         try:
-            await api._init_browser()
-            await api._wait_if_needed()
+            api._init_browser()
+            api._wait_if_needed()
 
-            response = await api.page.goto(url)
+            response = api.page.goto(url)
 
             if response.status == 200:
                 # Get image bytes
-                image_bytes = await response.body()
+                image_bytes = response.body()
 
                 # Save to file
                 async with aiofiles.open(output_path, 'wb') as f:
-                    await f.write(image_bytes)
+                    f.write(image_bytes)
 
                 return True
             else:
