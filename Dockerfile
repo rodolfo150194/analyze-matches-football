@@ -10,38 +10,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies including Playwright requirements
+# Install basic system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     postgresql-client \
     curl \
-    # Playwright/Chromium dependencies
-    libxcb-shm0 \
-    libx11-xcb1 \
-    libx11-6 \
-    libxcb1 \
-    libxext6 \
-    libxrandr2 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxi6 \
-    libgtk-3-0 \
-    libgdk-pixbuf2.0-0 \
-    libpangocairo-1.0-0 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libgbm1 \
-    libasound2 \
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
@@ -49,8 +23,8 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# Install Playwright browsers (must be done as root before switching to appuser)
-RUN playwright install chromium --with-deps
+# Install Playwright with all system dependencies (automatically installs what's needed)
+RUN playwright install --with-deps chromium
 
 # Copy project files
 COPY . .
