@@ -23,6 +23,7 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
+RUN playwright install chromium
 # Copy project files
 COPY . .
 
@@ -39,6 +40,8 @@ USER appuser
 
 # Expose port
 EXPOSE 8000
+
+
 
 # Run migrations and start gunicorn directly
 CMD python manage.py migrate --noinput && \
