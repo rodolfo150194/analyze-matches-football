@@ -1,5 +1,5 @@
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth_sync
+from playwright_stealth import stealth
 from datetime import datetime, timedelta
 import pandas as pd
 import time
@@ -89,7 +89,7 @@ class SofascoreAPI:
             self.page = context.new_page()
 
             # APLICAR PLAYWRIGHT-STEALTH (oculta automatización) - AHORA FUNCIONA!
-            stealth_sync(self.page)
+            stealth(self.page)
             print("[INFO] ✓ Playwright-stealth aplicado correctamente (modo SYNC)")
 
             # Headers adicionales más realistas
