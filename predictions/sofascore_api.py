@@ -1,5 +1,11 @@
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth
+try:
+    from playwright_stealth import stealth
+    STEALTH_AVAILABLE = True
+except ImportError:
+    STEALTH_AVAILABLE = False
+    print("[WARN] playwright-stealth no disponible - continuando sin anti-detección avanzada")
+
 from datetime import datetime, timedelta
 import pandas as pd
 import time
@@ -88,9 +94,12 @@ class SofascoreAPI:
             # Crear página desde el contexto
             self.page = context.new_page()
 
-            # APLICAR PLAYWRIGHT-STEALTH (oculta automatización) - AHORA FUNCIONA!
-            stealth(self.page)
-            print("[INFO] ✓ Playwright-stealth aplicado correctamente (modo SYNC)")
+            # APLICAR PLAYWRIGHT-STEALTH (oculta automatización)
+            if STEALTH_AVAILABLE:
+                stealth(self.page)
+                print("[INFO] ✓ Playwright-stealth aplicado correctamente")
+            else:
+                print("[WARN] Playwright-stealth no disponible - usando solo headers básicos")
 
             # Headers adicionales más realistas
             self.page.set_extra_http_headers({
