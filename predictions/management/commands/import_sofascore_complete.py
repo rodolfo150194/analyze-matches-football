@@ -135,7 +135,7 @@ class Command(BaseCommand):
                     job = ImportJob.objects.get(pk=self.job_id)
                     job.update_progress(percentage, step)
 
-                _update)()
+                _update()
             except ImportJob.DoesNotExist:
                 pass
 
