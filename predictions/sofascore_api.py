@@ -1,54 +1,102 @@
 from playwright.async_api import async_playwright
+from playwright_stealth import stealth_async
 import asyncio
 from datetime import datetime, timedelta
 import pandas as pd
 import time
 import random
+import os
 
 BASE_URL = "https://www.sofascore.com/api/v1"
 
+# Lista de User-Agents para rotar (navegadores reales recientes)
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+]
+
 
 class SofascoreAPI:
-    def __init__(self, delay_min=8, delay_max=15):
+    def __init__(self, delay_min=8, delay_max=15, is_vps=None):
         self.browser = None
         self.page = None
         self.playwright = None
-        self.delay_min = delay_min  # Delay mínimo entre peticiones (segundos)
-        self.delay_max = delay_max  # Delay máximo entre peticiones (segundos)
+
+        # Auto-detectar si estamos en VPS (mediante variable de entorno)
+        if is_vps is None:
+            is_vps = os.getenv('IS_VPS', 'false').lower() == 'true'
+
+        # Delays más largos para VPS (anti-detección agresiva)
+        if is_vps:
+            self.delay_min = max(delay_min, 15)  # Mínimo 15 segundos en VPS
+            self.delay_max = max(delay_max, 25)  # Máximo 25 segundos en VPS
+            print(f"[INFO] Modo VPS activado - Delays: {self.delay_min}-{self.delay_max}s")
+        else:
+            self.delay_min = delay_min
+            self.delay_max = delay_max
+            print(f"[INFO] Modo Local - Delays: {self.delay_min}-{self.delay_max}s")
+
         self.last_request_time = 0
         self.initialized = False
+        self.is_vps = is_vps
 
     async def _init_browser(self):
         if self.playwright is None:
             self.playwright = await async_playwright().start()
 
-            # Argumentos para VPS/Docker (entornos sin GUI)
+            # Argumentos mejorados para anti-detección
             launch_args = [
-                '--no-sandbox',  # Necesario en entornos sin sandbox
+                '--no-sandbox',
                 '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',  # Evita problemas de memoria compartida
-                '--disable-gpu',  # Desactiva GPU en headless
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
                 '--disable-software-rasterizer',
                 '--disable-extensions',
                 '--disable-blink-features=AutomationControlled',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-web-security',  # Útil para evitar CORS en scraping
+                '--disable-features=VizDisplayCompositor',
+                '--lang=en-US,en',
             ]
 
             self.browser = await self.playwright.chromium.launch(
                 headless=True,
-                args=launch_args
+                args=launch_args,
+                slow_mo=random.randint(100, 300) if self.is_vps else 0,  # Simular humano en VPS
             )
 
-            # Crear página con headers realistas
-            self.page = await self.browser.new_page(
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            # Seleccionar User-Agent aleatorio
+            user_agent = random.choice(USER_AGENTS)
+            print(f"[INFO] User-Agent: {user_agent[:50]}...")
+
+            # Crear contexto del navegador (mejor que new_page directamente)
+            context = await self.browser.new_context(
+                user_agent=user_agent,
                 viewport={'width': 1920, 'height': 1080},
-                locale='en-US'
+                locale='en-US',
+                timezone_id='America/New_York',  # Timezone realista
+                # Permisos como un usuario real
+                permissions=['geolocation'],
+                geolocation={'latitude': 40.7128, 'longitude': -74.0060},  # NYC
+                color_scheme='light',
+                device_scale_factor=1,
             )
 
-            # Añadir headers adicionales
+            # Crear página desde el contexto
+            self.page = await context.new_page()
+
+            # APLICAR PLAYWRIGHT-STEALTH (oculta automatización)
+            await stealth_async(self.page)
+            print("[INFO] Playwright-stealth aplicado correctamente")
+
+            # Headers adicionales más realistas
             await self.page.set_extra_http_headers({
                 'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Language': 'en-US,en;q=0.9,es;q=0.8',
                 'Accept-Encoding': 'gzip, deflate, br',
                 'Referer': 'https://www.sofascore.com/',
                 'Origin': 'https://www.sofascore.com',
@@ -56,51 +104,177 @@ class SofascoreAPI:
                 'Sec-Fetch-Dest': 'empty',
                 'Sec-Fetch-Mode': 'cors',
                 'Sec-Fetch-Site': 'same-origin',
+                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                'Sec-Ch-Ua-Mobile': '?0',
+                'Sec-Ch-Ua-Platform': '"Windows"',
+                'DNT': '1',  # Do Not Track
+                'Upgrade-Insecure-Requests': '1',
             })
 
-            # Visitar la página principal primero para obtener cookies
+            # Inyectar scripts para ocultar webdriver
+            await self.page.add_init_script("""
+                // Ocultar que somos un navegador automatizado
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+
+                // Fingir plugins de navegador real
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+
+                // Fingir idiomas
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en', 'es']
+                });
+
+                // Chrome object
+                window.chrome = {
+                    runtime: {}
+                };
+
+                // Permisos
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
+            """)
+
+            # Visitar la página principal para obtener cookies y sesión
             if not self.initialized:
                 try:
                     print("[INFO] Inicializando sesión en SofaScore...")
-                    await self.page.goto('https://www.sofascore.com/', wait_until='domcontentloaded')
-                    await asyncio.sleep(random.uniform(3, 5))
+
+                    # Ir a la página principal
+                    await self.page.goto('https://www.sofascore.com/', wait_until='domcontentloaded', timeout=60000)
+
+                    # Simular comportamiento humano
+                    await asyncio.sleep(random.uniform(2, 4))
+
+                    # Scroll aleatorio (como humano)
+                    await self.page.evaluate(f'window.scrollBy(0, {random.randint(100, 300)})')
+                    await asyncio.sleep(random.uniform(1, 2))
+
+                    # Mover mouse aleatoriamente
+                    await self.page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+                    await asyncio.sleep(random.uniform(0.5, 1.5))
+
                     self.initialized = True
                     print("[INFO] Sesión inicializada correctamente")
+
+                    # Delay extra en VPS después de inicializar
+                    if self.is_vps:
+                        delay = random.uniform(5, 10)
+                        print(f"[INFO] Esperando {delay:.1f}s adicionales (modo VPS)...")
+                        await asyncio.sleep(delay)
+
                 except Exception as e:
                     print(f"[WARN] Error inicializando sesión: {e}")
+                    # No fallar, intentar continuar
 
     async def _wait_if_needed(self):
-        """Rate limiting: espera entre peticiones"""
+        """Rate limiting mejorado: espera entre peticiones con variación humana"""
         current_time = time.time()
         time_since_last = current_time - self.last_request_time
 
         if time_since_last < self.delay_min:
-            # Añadir delay aleatorio para parecer más humano
-            delay = random.uniform(self.delay_min, self.delay_max)
-            await asyncio.sleep(delay)
+            # Delay aleatorio con distribución más realista
+            base_delay = random.uniform(self.delay_min, self.delay_max)
+
+            # Variación adicional para parecer más humano (±10%)
+            variation = random.uniform(-0.1, 0.1) * base_delay
+            final_delay = max(1, base_delay + variation)  # Mínimo 1 segundo
+
+            print(f"[RATE LIMIT] Esperando {final_delay:.1f}s antes de siguiente petición...")
+            await asyncio.sleep(final_delay)
+        else:
+            # Aunque no necesitamos esperar, agregar micro-delay aleatorio
+            micro_delay = random.uniform(0.5, 2.0)
+            await asyncio.sleep(micro_delay)
 
         self.last_request_time = time.time()
 
-    async def _get(self, endpoint):
+    async def _get(self, endpoint, max_retries=3):
+        """GET mejorado con reintentos en caso de error 403"""
         await self._init_browser()
         await self._wait_if_needed()  # Rate limiting
 
         url = f"{BASE_URL}{endpoint}"
-        response = await self.page.goto(url)
-        if response.status == 200:
-            return await response.json()
-        else:
-            raise Exception(f"Failed to fetch {endpoint}: {response.status}")
 
-    async def _raw_get(self, url):
+        for attempt in range(max_retries):
+            try:
+                response = await self.page.goto(url, timeout=60000)
+
+                if response.status == 200:
+                    return await response.json()
+                elif response.status == 403:
+                    print(f"[ERROR 403] Detectado en {endpoint} (intento {attempt + 1}/{max_retries})")
+
+                    if attempt < max_retries - 1:
+                        # Esperar más tiempo antes de reintentar
+                        wait_time = random.uniform(30, 60) if self.is_vps else random.uniform(10, 20)
+                        print(f"[RETRY] Esperando {wait_time:.1f}s antes de reintentar...")
+                        await asyncio.sleep(wait_time)
+
+                        # Cerrar y reinicializar navegador con nuevo user-agent
+                        print("[RETRY] Reinicializando navegador con nuevo User-Agent...")
+                        await self.close()
+                        self.playwright = None
+                        self.initialized = False
+                        await self._init_browser()
+                    else:
+                        raise Exception(f"Error 403 persistente después de {max_retries} intentos: {endpoint}")
+                else:
+                    raise Exception(f"HTTP {response.status}: {endpoint}")
+
+            except asyncio.TimeoutError:
+                print(f"[TIMEOUT] en {endpoint} (intento {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(random.uniform(5, 10))
+                else:
+                    raise Exception(f"Timeout persistente: {endpoint}")
+
+        raise Exception(f"Failed to fetch {endpoint} after {max_retries} attempts")
+
+    async def _raw_get(self, url, max_retries=3):
+        """GET mejorado para URLs completas con reintentos"""
         await self._init_browser()
         await self._wait_if_needed()  # Rate limiting
 
-        response = await self.page.goto(url)
-        if response.status == 200:
-            return await response.json()
-        else:
-            raise Exception(f"Failed to fetch {url}: {response.status}")
+        for attempt in range(max_retries):
+            try:
+                response = await self.page.goto(url, timeout=60000)
+
+                if response.status == 200:
+                    return await response.json()
+                elif response.status == 403:
+                    print(f"[ERROR 403] Detectado en {url[:50]}... (intento {attempt + 1}/{max_retries})")
+
+                    if attempt < max_retries - 1:
+                        wait_time = random.uniform(30, 60) if self.is_vps else random.uniform(10, 20)
+                        print(f"[RETRY] Esperando {wait_time:.1f}s antes de reintentar...")
+                        await asyncio.sleep(wait_time)
+
+                        # Reinicializar con nuevo user-agent
+                        await self.close()
+                        self.playwright = None
+                        self.initialized = False
+                        await self._init_browser()
+                    else:
+                        raise Exception(f"Error 403 persistente después de {max_retries} intentos")
+                else:
+                    raise Exception(f"HTTP {response.status}: {url}")
+
+            except asyncio.TimeoutError:
+                print(f"[TIMEOUT] en {url[:50]}... (intento {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(random.uniform(5, 10))
+                else:
+                    raise Exception(f"Timeout persistente: {url}")
+
+        raise Exception(f"Failed to fetch {url} after {max_retries} attempts")
 
     async def close(self):
         if self.browser:
