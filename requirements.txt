@@ -42,3 +42,4 @@ pytz>=2023.3
 # Data Validation & Type Hints
 dataclasses>=0.6  # For Python < 3.7 compatibility
 typing-extensions>=4.7.0
+aiofiles
