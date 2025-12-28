@@ -1,6 +1,5 @@
-from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
-import asyncio
+from playwright.sync_api import sync_playwright
+from playwright_stealth import stealth_sync
 from datetime import datetime, timedelta
 import pandas as pd
 import time
@@ -44,9 +43,9 @@ class SofascoreAPI:
         self.initialized = False
         self.is_vps = is_vps
 
-    async def _init_browser(self):
+    def _init_browser(self):
         if self.playwright is None:
-            self.playwright = await async_playwright().start()
+            self.playwright = sync_playwright().start()
 
             # Argumentos mejorados para anti-detección
             launch_args = [
@@ -63,7 +62,7 @@ class SofascoreAPI:
                 '--lang=en-US,en',
             ]
 
-            self.browser = await self.playwright.chromium.launch(
+            self.browser = self.playwright.chromium.launch(
                 headless=True,
                 args=launch_args,
                 slow_mo=random.randint(100, 300) if self.is_vps else 0,  # Simular humano en VPS
@@ -74,7 +73,7 @@ class SofascoreAPI:
             print(f"[INFO] User-Agent: {user_agent[:50]}...")
 
             # Crear contexto del navegador (mejor que new_page directamente)
-            context = await self.browser.new_context(
+            context = self.browser.new_context(
                 user_agent=user_agent,
                 viewport={'width': 1920, 'height': 1080},
                 locale='en-US',
@@ -87,14 +86,14 @@ class SofascoreAPI:
             )
 
             # Crear página desde el contexto
-            self.page = await context.new_page()
+            self.page = context.new_page()
 
-            # APLICAR PLAYWRIGHT-STEALTH (oculta automatización)
-            await stealth_async(self.page)
-            print("[INFO] Playwright-stealth aplicado correctamente")
+            # APLICAR PLAYWRIGHT-STEALTH (oculta automatización) - AHORA FUNCIONA!
+            stealth_sync(self.page)
+            print("[INFO] ✓ Playwright-stealth aplicado correctamente (modo SYNC)")
 
             # Headers adicionales más realistas
-            await self.page.set_extra_http_headers({
+            self.page.set_extra_http_headers({
                 'Accept': 'application/json, text/plain, */*',
                 'Accept-Language': 'en-US,en;q=0.9,es;q=0.8',
                 'Accept-Encoding': 'gzip, deflate, br',
@@ -112,7 +111,7 @@ class SofascoreAPI:
             })
 
             # Inyectar scripts para ocultar webdriver
-            await self.page.add_init_script("""
+            self.page.add_init_script("""
                 // Ocultar que somos un navegador automatizado
                 Object.defineProperty(navigator, 'webdriver', {
                     get: () => undefined
@@ -148,18 +147,18 @@ class SofascoreAPI:
                     print("[INFO] Inicializando sesión en SofaScore...")
 
                     # Ir a la página principal
-                    await self.page.goto('https://www.sofascore.com/', wait_until='domcontentloaded', timeout=60000)
+                    self.page.goto('https://www.sofascore.com/', wait_until='domcontentloaded', timeout=60000)
 
                     # Simular comportamiento humano
-                    await asyncio.sleep(random.uniform(2, 4))
+                    time.sleep(random.uniform(2, 4))
 
                     # Scroll aleatorio (como humano)
-                    await self.page.evaluate(f'window.scrollBy(0, {random.randint(100, 300)})')
-                    await asyncio.sleep(random.uniform(1, 2))
+                    self.page.evaluate(f'window.scrollBy(0, {random.randint(100, 300)})')
+                    time.sleep(random.uniform(1, 2))
 
                     # Mover mouse aleatoriamente
-                    await self.page.mouse.move(random.randint(100, 500), random.randint(100, 500))
-                    await asyncio.sleep(random.uniform(0.5, 1.5))
+                    self.page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+                    time.sleep(random.uniform(0.5, 1.5))
 
                     self.initialized = True
                     print("[INFO] Sesión inicializada correctamente")
@@ -168,13 +167,13 @@ class SofascoreAPI:
                     if self.is_vps:
                         delay = random.uniform(5, 10)
                         print(f"[INFO] Esperando {delay:.1f}s adicionales (modo VPS)...")
-                        await asyncio.sleep(delay)
+                        time.sleep(delay)
 
                 except Exception as e:
                     print(f"[WARN] Error inicializando sesión: {e}")
                     # No fallar, intentar continuar
 
-    async def _wait_if_needed(self):
+    def _wait_if_needed(self):
         """Rate limiting mejorado: espera entre peticiones con variación humana"""
         current_time = time.time()
         time_since_last = current_time - self.last_request_time
@@ -188,27 +187,27 @@ class SofascoreAPI:
             final_delay = max(1, base_delay + variation)  # Mínimo 1 segundo
 
             print(f"[RATE LIMIT] Esperando {final_delay:.1f}s antes de siguiente petición...")
-            await asyncio.sleep(final_delay)
+            time.sleep(final_delay)
         else:
             # Aunque no necesitamos esperar, agregar micro-delay aleatorio
             micro_delay = random.uniform(0.5, 2.0)
-            await asyncio.sleep(micro_delay)
+            time.sleep(micro_delay)
 
         self.last_request_time = time.time()
 
-    async def _get(self, endpoint, max_retries=3):
+    def _get(self, endpoint, max_retries=3):
         """GET mejorado con reintentos en caso de error 403"""
-        await self._init_browser()
-        await self._wait_if_needed()  # Rate limiting
+        self._init_browser()
+        self._wait_if_needed()  # Rate limiting
 
         url = f"{BASE_URL}{endpoint}"
 
         for attempt in range(max_retries):
             try:
-                response = await self.page.goto(url, timeout=60000)
+                response = self.page.goto(url, timeout=60000)
 
                 if response.status == 200:
-                    return await response.json()
+                    return response.json()
                 elif response.status == 403:
                     print(f"[ERROR 403] Detectado en {endpoint} (intento {attempt + 1}/{max_retries})")
 
@@ -216,86 +215,92 @@ class SofascoreAPI:
                         # Esperar más tiempo antes de reintentar
                         wait_time = random.uniform(30, 60) if self.is_vps else random.uniform(10, 20)
                         print(f"[RETRY] Esperando {wait_time:.1f}s antes de reintentar...")
-                        await asyncio.sleep(wait_time)
+                        time.sleep(wait_time)
 
                         # Cerrar y reinicializar navegador con nuevo user-agent
                         print("[RETRY] Reinicializando navegador con nuevo User-Agent...")
-                        await self.close()
+                        self.close()
                         self.playwright = None
                         self.initialized = False
-                        await self._init_browser()
+                        self._init_browser()
                     else:
                         raise Exception(f"Error 403 persistente después de {max_retries} intentos: {endpoint}")
                 else:
                     raise Exception(f"HTTP {response.status}: {endpoint}")
 
-            except asyncio.TimeoutError:
-                print(f"[TIMEOUT] en {endpoint} (intento {attempt + 1}/{max_retries})")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(random.uniform(5, 10))
+            except Exception as e:
+                if "Timeout" in str(e) or "TimeoutError" in str(type(e).__name__):
+                    print(f"[TIMEOUT] en {endpoint} (intento {attempt + 1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        time.sleep(random.uniform(5, 10))
+                    else:
+                        raise Exception(f"Timeout persistente: {endpoint}")
                 else:
-                    raise Exception(f"Timeout persistente: {endpoint}")
+                    raise
 
         raise Exception(f"Failed to fetch {endpoint} after {max_retries} attempts")
 
-    async def _raw_get(self, url, max_retries=3):
+    def _raw_get(self, url, max_retries=3):
         """GET mejorado para URLs completas con reintentos"""
-        await self._init_browser()
-        await self._wait_if_needed()  # Rate limiting
+        self._init_browser()
+        self._wait_if_needed()  # Rate limiting
 
         for attempt in range(max_retries):
             try:
-                response = await self.page.goto(url, timeout=60000)
+                response = self.page.goto(url, timeout=60000)
 
                 if response.status == 200:
-                    return await response.json()
+                    return response.json()
                 elif response.status == 403:
                     print(f"[ERROR 403] Detectado en {url[:50]}... (intento {attempt + 1}/{max_retries})")
 
                     if attempt < max_retries - 1:
                         wait_time = random.uniform(30, 60) if self.is_vps else random.uniform(10, 20)
                         print(f"[RETRY] Esperando {wait_time:.1f}s antes de reintentar...")
-                        await asyncio.sleep(wait_time)
+                        time.sleep(wait_time)
 
                         # Reinicializar con nuevo user-agent
-                        await self.close()
+                        self.close()
                         self.playwright = None
                         self.initialized = False
-                        await self._init_browser()
+                        self._init_browser()
                     else:
                         raise Exception(f"Error 403 persistente después de {max_retries} intentos")
                 else:
                     raise Exception(f"HTTP {response.status}: {url}")
 
-            except asyncio.TimeoutError:
-                print(f"[TIMEOUT] en {url[:50]}... (intento {attempt + 1}/{max_retries})")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(random.uniform(5, 10))
+            except Exception as e:
+                if "Timeout" in str(e) or "TimeoutError" in str(type(e).__name__):
+                    print(f"[TIMEOUT] en {url[:50]}... (intento {attempt + 1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        time.sleep(random.uniform(5, 10))
+                    else:
+                        raise Exception(f"Timeout persistente: {url}")
                 else:
-                    raise Exception(f"Timeout persistente: {url}")
+                    raise
 
         raise Exception(f"Failed to fetch {url} after {max_retries} attempts")
 
-    async def close(self):
+    def close(self):
         if self.browser:
-            await self.browser.close()
+            self.browser.close()
         if self.playwright:
-            await self.playwright.stop()
+            self.playwright.stop()
 
         # ============================================
         # MÉTODOS PARA PARTIDOS
         # ============================================
 
-    async def get_partidos_hoy(self, deporte="football"):
+    def get_partidos_hoy(self, deporte="football"):
         """
         Obtener partidos del día actual
         Deportes disponibles: football, basketball, tennis, etc.
         """
         hoy = datetime.now().strftime("%Y-%m-%d")
         endpoint = f"/sport/{deporte}/scheduled-events/{hoy}"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_partidos_fecha(self, fecha, deporte="football"):
+    def get_partidos_fecha(self, fecha, deporte="football"):
         """
         Obtener partidos de una fecha específica
         fecha: formato "YYYY-MM-DD" o datetime object
@@ -303,182 +308,182 @@ class SofascoreAPI:
         if isinstance(fecha, datetime):
             fecha = fecha.strftime("%Y-%m-%d")
         endpoint = f"/sport/{deporte}/scheduled-events/{fecha}"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_partidos_en_vivo(self, deporte="football"):
+    def get_partidos_en_vivo(self, deporte="football"):
         """
         Obtener partidos en vivo
         """
         endpoint = f"/sport/{deporte}/events/live"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_partido_detalles(self, event_id):
+    def get_partido_detalles(self, event_id):
         """
         Obtener detalles de un partido específico
         """
         endpoint = f"/event/{event_id}"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_partido_estadisticas(self, event_id):
+    def get_partido_estadisticas(self, event_id):
         """
         Obtener estadísticas de un partido
         """
         endpoint = f"/event/{event_id}/statistics"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_partido_lineups(self, event_id):
+    def get_partido_lineups(self, event_id):
         """
         Obtener alineaciones de un partido
         """
         endpoint = f"/event/{event_id}/lineups"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_partido_incidentes(self, event_id):
+    def get_partido_incidentes(self, event_id):
         """
         Obtener eventos del partido (goles, tarjetas, etc.)
         """
         endpoint = f"/event/{event_id}/incidents"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_partido_xg(self, event_id):
+    def get_partido_xg(self, event_id):
         """
         Obtener datos de Expected Goals (xG) de un partido
         Incluido en estadísticas pero este método es más explícito
         """
-        stats = await self.get_partido_estadisticas(event_id)
+        stats = self.get_partido_estadisticas(event_id)
         # xG suele estar en las estadísticas bajo 'expectedGoals'
         return stats
 
-    async def get_partido_forma_reciente(self, event_id):
+    def get_partido_forma_reciente(self, event_id):
         """
         Obtener forma reciente de ambos equipos antes del partido
         """
         endpoint = f"/event/{event_id}/form"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
         # ============================================
         # MÉTODOS PARA EQUIPOS
         # ============================================
 
-    async def get_equipo_info(self, team_id):
+    def get_equipo_info(self, team_id):
         """
         Obtener información de un equipo
         """
         endpoint = f"/team/{team_id}"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_equipo_proximos_partidos(self, team_id):
+    def get_equipo_proximos_partidos(self, team_id):
         """
         Obtener próximos partidos de un equipo
         """
         endpoint = f"/team/{team_id}/events/next/0"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_equipo_ultimos_partidos(self, team_id):
+    def get_equipo_ultimos_partidos(self, team_id):
         """
         Obtener últimos partidos de un equipo
         """
         endpoint = f"/team/{team_id}/events/last/0"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_equipo_jugadores(self, team_id):
+    def get_equipo_jugadores(self, team_id):
         """
         Obtener plantilla de un equipo
         """
         endpoint = f"/team/{team_id}/players"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_equipo_lesiones(self, team_id):
+    def get_equipo_lesiones(self, team_id):
         """
         Obtener lesiones y suspensiones de un equipo
         """
         endpoint = f"/team/{team_id}/unavailable"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_jugador_info(self, player_id):
+    def get_jugador_info(self, player_id):
         """
         Obtener información de un jugador específico
         """
         endpoint = f"/player/{player_id}"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_jugador_estadisticas(self, player_id, tournament_id, season_id):
+    def get_jugador_estadisticas(self, player_id, tournament_id, season_id):
         """
         Obtener estadísticas de un jugador en una temporada específica
         """
         endpoint = f"/player/{player_id}/unique-tournament/{tournament_id}/season/{season_id}/statistics/overall"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
         # ============================================
         # MÉTODOS PARA TORNEOS/LIGAS
         # ============================================
 
-    async def get_torneo_info(self, tournament_id):
+    def get_torneo_info(self, tournament_id):
         """
         Obtener información de un torneo
         """
         endpoint = f"/unique-tournament/{tournament_id}/"
         # endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/info"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_info_temporada_info(self, tournament_id, season_id):
+    def get_info_temporada_info(self, tournament_id, season_id):
         """
         Obtener información de un torneo
         """
         endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/info"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_temporadas_ligas_info(self, tournament_id):
+    def get_temporadas_ligas_info(self, tournament_id):
         """
         Obtener información de un torneo
         """
         endpoint = f"/unique-tournament/{tournament_id}/seasons/"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_equipos_temporada_info(self, tournament_id, season_id):
+    def get_equipos_temporada_info(self, tournament_id, season_id):
         """
         Obtener información de un torneo
         """
         endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/teams"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
 
-    async def get_torneo_tabla(self, tournament_id, season_id):
+    def get_torneo_tabla(self, tournament_id, season_id):
         """
         Obtener tabla de posiciones de un torneo
         """
         endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/standings/total"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_torneo_partidos(self, tournament_id, season_id):
+    def get_torneo_partidos(self, tournament_id, season_id):
         """
         Obtener todos los partidos de un torneo
         """
         endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/events/last/0"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_torneo_rounds(self, tournament_id, season_id):
+    def get_torneo_rounds(self, tournament_id, season_id):
         """
         Obtener las rondas de un torneo/temporada
         """
         endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/rounds"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_torneo_partidos_round(self, tournament_id, season_id, round_number):
+    def get_torneo_partidos_round(self, tournament_id, season_id, round_number):
         """
         Obtener partidos de una ronda específica
         """
         endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/events/round/{round_number}"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_torneo_proximos_partidos(self, tournament_id, season_id):
+    def get_torneo_proximos_partidos(self, tournament_id, season_id):
         """
         Obtener próximos partidos de un torneo
         """
         endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/events/next/0"
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_league_player_stats(self, tournament_id, season_id, accumulation='total',
+    def get_league_player_stats(self, tournament_id, season_id, accumulation='total',
                                       limit=100, offset=0, order='-rating'):
         """
         Obtener estadísticas de jugadores para una liga/temporada
@@ -511,9 +516,9 @@ class SofascoreAPI:
                    f"?limit={limit}&order={order}&offset={offset}"
                    f"&accumulation={accumulation}&fields={fields_param}")
 
-        return await self._get(endpoint)
+        return self._get(endpoint)
 
-    async def get_all_league_player_stats(self, tournament_id, season_id, accumulation='total',
+    def get_all_league_player_stats(self, tournament_id, season_id, accumulation='total',
                                           max_pages=None):
         """
         Obtener TODAS las estadísticas de jugadores paginadas
@@ -532,7 +537,7 @@ class SofascoreAPI:
         page = 0
 
         while True:
-            data = await self.get_league_player_stats(
+            data = self.get_league_player_stats(
                 tournament_id, season_id, accumulation,
                 limit=100, offset=offset
             )
@@ -561,7 +566,7 @@ class SofascoreAPI:
     # MÉTODOS PARA IMPORTACIÓN UNIFICADA
     # ============================================
 
-    async def get_season_teams(self, tournament_id, season_id):
+    def get_season_teams(self, tournament_id, season_id):
         """
         Obtener todos los equipos de una temporada con información completa
 
@@ -574,12 +579,12 @@ class SofascoreAPI:
         """
         # Obtener lista de equipos
         teams_endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/teams"
-        teams_data = await self._get(teams_endpoint)
+        teams_data = self._get(teams_endpoint)
 
         # teams_data ya contiene la lista de equipos bajo la key 'teams'
         return teams_data
 
-    async def get_season_matches(self, tournament_id, season_id, status='all'):
+    def get_season_matches(self, tournament_id, season_id, status='all'):
         """
         Obtener todos los partidos de una temporada usando jornadas/rounds
 
@@ -596,7 +601,7 @@ class SofascoreAPI:
 
         try:
             # Primero intentar obtener todas las jornadas
-            rounds_data = await self.get_torneo_rounds(tournament_id, season_id)
+            rounds_data = self.get_torneo_rounds(tournament_id, season_id)
 
             if rounds_data and 'rounds' in rounds_data:
                 rounds = rounds_data['rounds']
@@ -605,7 +610,7 @@ class SofascoreAPI:
                 for round_info in rounds:
                     round_num = round_info.get('round', 0)
                     try:
-                        round_matches = await self.get_torneo_partidos_round(
+                        round_matches = self.get_torneo_partidos_round(
                             tournament_id, season_id, round_num
                         )
 
@@ -642,7 +647,7 @@ class SofascoreAPI:
         if status in ['finished', 'all']:
             try:
                 finished_endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/events/last/0"
-                finished_data = await self._get(finished_endpoint)
+                finished_data = self._get(finished_endpoint)
                 if finished_data and 'events' in finished_data:
                     for match in finished_data['events']:
                         match_id = match.get('id')
@@ -656,7 +661,7 @@ class SofascoreAPI:
         if status in ['scheduled', 'all']:
             try:
                 scheduled_endpoint = f"/unique-tournament/{tournament_id}/season/{season_id}/events/next/0"
-                scheduled_data = await self._get(scheduled_endpoint)
+                scheduled_data = self._get(scheduled_endpoint)
                 if scheduled_data and 'events' in scheduled_data:
                     for match in scheduled_data['events']:
                         match_id = match.get('id')
@@ -669,7 +674,7 @@ class SofascoreAPI:
 
         return all_matches
 
-    async def get_match_complete_data(self, event_id):
+    def get_match_complete_data(self, event_id):
         """
         Obtener datos completos de un partido (detalles + estadísticas + lineups)
 
@@ -683,21 +688,21 @@ class SofascoreAPI:
 
         try:
             # Detalles básicos del partido
-            result['details'] = await self.get_partido_detalles(event_id)
+            result['details'] = self.get_partido_detalles(event_id)
         except Exception as e:
             print(f"  [WARN] Error obteniendo detalles de {event_id}: {e}")
             result['details'] = None
 
         try:
             # Estadísticas del partido
-            result['statistics'] = await self.get_partido_estadisticas(event_id)
+            result['statistics'] = self.get_partido_estadisticas(event_id)
         except Exception as e:
             print(f"  [WARN] Error obteniendo estadísticas de {event_id}: {e}")
             result['statistics'] = None
 
         try:
             # Lineups
-            result['lineups'] = await self.get_partido_lineups(event_id)
+            result['lineups'] = self.get_partido_lineups(event_id)
         except Exception as e:
             print(f"  [WARN] Error obteniendo lineups de {event_id}: {e}")
             result['lineups'] = None
@@ -709,7 +714,7 @@ class SofascoreAPI:
     # FUNCIONES DE UTILIDAD
     # ============================================
 
-    async def formatear_partidos(data):
+    def formatear_partidos(data):
         """
         Formatea los datos de partidos en un formato legible
         """
