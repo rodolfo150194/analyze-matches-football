@@ -1,6 +1,6 @@
 from playwright.sync_api import sync_playwright
 try:
-    from playwright_stealth import stealth
+    from playwright_stealth.stealth import Stealth
     STEALTH_AVAILABLE = True
 except ImportError:
     STEALTH_AVAILABLE = False
@@ -96,7 +96,8 @@ class SofascoreAPI:
 
             # APLICAR PLAYWRIGHT-STEALTH (oculta automatización)
             if STEALTH_AVAILABLE:
-                stealth(self.page)
+                stealth_config = Stealth()
+                stealth_config.use_sync(self.page)
                 print("[INFO] ✓ Playwright-stealth aplicado correctamente")
             else:
                 print("[WARN] Playwright-stealth no disponible - usando solo headers básicos")
