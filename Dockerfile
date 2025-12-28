@@ -23,11 +23,19 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# Install Playwright with all system dependencies (automatically installs what's needed)
-RUN playwright install --with-deps chromium
-
 # Copy project files
 COPY . .
+
+# Create a non-root user
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+# Install Playwright system dependencies as root
+RUN playwright install-deps chromium
+
+# Switch to appuser and install Playwright browsers in user space
+USER appuser
+RUN playwright install chromium
 
 # Collect static files (skip if fails)
 RUN python manage.py collectstatic --noinput || echo "Static collection skipped"
@@ -35,11 +43,6 @@ RUN python manage.py collectstatic --noinput || echo "Static collection skipped"
 # Create staticfiles and media directories with proper permissions
 RUN mkdir -p staticfiles media/teams media/players && \
     chmod -R 755 staticfiles media
-
-# Create a non-root user
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
-USER appuser
 
 # Expose port
 EXPOSE 8000
