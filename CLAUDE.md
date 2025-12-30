@@ -108,6 +108,46 @@ python manage.py download_images --teams --players --force
 python manage.py download_images --teams-only --limit 20
 ```
 
+### Re-import Specific Matchdays or Full Seasons
+```bash
+# Re-import Premier League matchday 20 from 2024/25 season
+python manage.py reimport_matchday --competition PL --seasons 2024 --matchday 20
+
+# Re-import multiple matchdays from one season
+python manage.py reimport_matchday --competition PL --seasons 2024 --matchday 18,19,20
+
+# Re-import ALL matchdays from 2024/25 season
+python manage.py reimport_matchday --competition PL --seasons 2024
+
+# Re-import ALL matchdays from multiple seasons
+python manage.py reimport_matchday --competition PL --seasons 2023,2024
+
+# Re-import specific matchday from multiple seasons
+python manage.py reimport_matchday --competition PL --seasons 2023,2024 --matchday 20
+
+# Preview without actually importing
+python manage.py reimport_matchday --competition PL --seasons 2024 --matchday 20 --dry-run
+
+# Force re-import even if data already exists
+python manage.py reimport_matchday --competition PL --seasons 2024 --force
+```
+
+**What `reimport_matchday` imports:**
+- ✅ Match statistics (shots, corners, possession, xG, etc.)
+- ✅ Lineups and player statistics per match
+- ✅ Match incidents (goals, cards, substitutions, VAR)
+- ✅ Advanced match data (momentum graph, shotmap, best players)
+
+**Key features:**
+- `--seasons`: Required. One or multiple seasons (comma-separated)
+- `--matchday`: Optional. If omitted, imports ALL matchdays from specified season(s)
+- `--force`: Re-import even if data already exists
+- `--dry-run`: Preview what would be imported
+
+**Difference between commands:**
+- `import_sofascore_complete --all-data`: Imports **everything** (teams, matches, players, stats, standings)
+- `reimport_matchday`: Re-imports **only match-level data** (stats, lineups, incidents) for existing matches
+
 ### Calculate Statistics
 ```bash
 # Calculate ALL statistics (TeamStats + HeadToHead) - RECOMMENDED
@@ -196,6 +236,7 @@ python manage.py runserver
     - **utils.py** - Fuzzy matching utilities
   - **management/commands/** - Custom Django management commands
     - **import_sofascore_complete.py** - Unified SofaScore import (teams, matches, players, stats)
+    - **reimport_matchday.py** - Re-import specific matchdays or full seasons (stats, lineups, incidents)
     - **import_leagues.py** - Import from Football-Data.co.uk CSVs
     - **import_fixtures.py** - Import upcoming fixtures
     - **import_transfermarkt.py** - Import market values

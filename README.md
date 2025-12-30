@@ -137,20 +137,93 @@ python manage.py import_sofascore_complete \
     --all-data
 ```
 
+**What `--all-data` imports:**
+- ✅ Teams (with manager info)
+- ✅ Matches (finished and scheduled)
+- ✅ Match statistics (shots, corners, possession, xG, fouls, cards)
+- ✅ Match lineups (starting XI and substitutes)
+- ✅ Player statistics per match (goals, assists, rating, passes, tackles, duels)
+- ✅ Match incidents (goals, cards, substitutions, VAR decisions)
+- ✅ Advanced match data (momentum graph, shotmap, best players)
+- ✅ Players with season statistics
+- ✅ Team standings/classification
+
 **Import specific modules:**
 ```bash
 # Teams only
 python manage.py import_sofascore_complete --competitions PL --seasons 2024 --teams-only
 
-# Matches with statistics
+# Matches with all statistics, lineups, and incidents
 python manage.py import_sofascore_complete --competitions PL --seasons 2024 --matches-only
 
-# Players with statistics
+# Players with season statistics
 python manage.py import_sofascore_complete --competitions PL --seasons 2024 --players-only
+
+# Team standings/classification
+python manage.py import_sofascore_complete --competitions PL --seasons 2024 --standings-only
+
+# Player injuries (current injury status)
+python manage.py import_sofascore_complete --competitions PL --seasons 2024 --injuries-only
 
 # Dry-run (preview without saving)
 python manage.py import_sofascore_complete --competitions PL --seasons 2024 --all-data --dry-run
+
+# Force re-import (overwrite existing data)
+python manage.py import_sofascore_complete --competitions PL --seasons 2024 --all-data --force
 ```
+
+**Available flags:**
+- `--all-data`: Import everything (teams, matches, match stats, lineups, incidents, players, standings)
+- `--teams-only`: Only import teams
+- `--matches-only`: Only import matches with statistics, lineups, and incidents
+- `--players-only`: Only import players with season statistics
+- `--standings-only`: Only import team standings
+- `--injuries-only`: Only import player injuries
+- `--force`: Force re-import even if data already exists
+- `--dry-run`: Preview what would be imported without saving
+
+### Re-import Specific Matchdays or Full Seasons
+
+If data import failed or you need to update specific matchdays:
+
+```bash
+# Re-import Premier League matchday 20 from 2024/25 season
+python manage.py reimport_matchday --competition PL --seasons 2024 --matchday 20
+
+# Re-import multiple matchdays from one season
+python manage.py reimport_matchday --competition PL --seasons 2024 --matchday 18,19,20
+
+# Re-import ALL matchdays from 2024/25 season
+python manage.py reimport_matchday --competition PL --seasons 2024
+
+# Re-import ALL matchdays from multiple seasons
+python manage.py reimport_matchday --competition PL --seasons 2023,2024
+
+# Re-import specific matchday from multiple seasons
+python manage.py reimport_matchday --competition PL --seasons 2023,2024 --matchday 20
+
+# Preview without actually importing
+python manage.py reimport_matchday --competition PL --seasons 2024 --matchday 20 --dry-run
+
+# Force re-import even if data already exists
+python manage.py reimport_matchday --competition PL --seasons 2024 --force
+```
+
+**What `reimport_matchday` imports:**
+- ✅ Match statistics (shots, corners, possession, xG, etc.)
+- ✅ Lineups and player statistics
+- ✅ Match incidents (goals, cards, substitutions, VAR)
+- ✅ Advanced match data (momentum graph, shotmap, best players)
+
+**Key features:**
+- `--seasons`: Required. One or multiple seasons (comma-separated)
+- `--matchday`: Optional. If omitted, imports ALL matchdays from specified season(s)
+- `--force`: Re-import even if data already exists
+- `--dry-run`: Preview what would be imported
+
+**Difference between commands:**
+- `import_sofascore_complete --all-data`: Imports **everything** (teams, matches, players, stats, standings)
+- `reimport_matchday`: Re-imports **only match-level data** (stats, lineups, incidents) for existing matches
 
 ### Value Bet Analysis
 
@@ -238,10 +311,12 @@ python manage.py get_odds \
 Located in `predictions/management/commands/`:
 
 **Data Import:**
-- `import_sofascore_complete.py` - Unified SofaScore import
+- `import_sofascore_complete.py` - Unified SofaScore import (teams, matches, stats, lineups, players)
+- `reimport_matchday.py` - Re-import specific matchdays (when data import failed)
 - `import_leagues.py` - Import Football-Data CSVs
 - `import_fixtures.py` - Import upcoming fixtures
 - `import_transfermarkt.py` - Import market values
+- `download_images.py` - Download team logos and player photos
 
 **Statistics:**
 - `calculate_stats.py` - Calculate all statistics
@@ -254,7 +329,9 @@ Located in `predictions/management/commands/`:
 - `get_odds.py` - Value bet analysis
 
 **Utilities:**
-- `consolidate_teams.py` - Merge duplicate teams
+- `consolidate_teams.py` - Merge duplicate teams (exact name matching)
+- `consolidate_teams_fuzzy.py` - Merge duplicate teams (fuzzy name matching)
+- `cleanup_duplicate_matches.py` - Remove duplicate matches (keeps api_id version)
 - `check_db_data.py` - Database diagnostics
 
 ### Weekly Workflow

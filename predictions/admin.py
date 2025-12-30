@@ -1,5 +1,9 @@
 from django.contrib import admin
 from django.utils.html import format_html
+from import_export import resources, fields
+from import_export.admin import ImportExportModelAdmin
+from import_export.widgets import ForeignKeyWidget
+
 from .models import (
     Competition, Team, Match, TeamStats, HeadToHead, Prediction,
     Player, PlayerStats, MatchPlayerStats, ShotEvent, TeamMarketValue, PlayerInjury,
@@ -14,9 +18,33 @@ class CompetitionAdmin(admin.ModelAdmin):
     search_fields = ('name', 'code', 'country')
     ordering = ('name',)
 
+class TeamResource(resources.ModelResource):
+
+    competition = fields.Field(
+        column_name='competition',
+        attribute='competition',
+        widget=ForeignKeyWidget(Competition, 'code')  # o 'name'
+    )
+
+    class Meta:
+        model = Team
+        import_id_fields = ('api_id',)
+        skip_unchanged = True
+        report_skipped = True
+
+        fields = (
+            'api_id',
+            'name',
+            'short_name',
+            'tla',
+            'competition',
+            'crest_url',
+            'manager'
+        )
 
 @admin.register(Team)
-class TeamAdmin(admin.ModelAdmin):
+class TeamAdmin(ImportExportModelAdmin):
+    resource_class = TeamResource
     list_display = ('name', 'short_name', 'tla', 'competition', 'api_id')
     list_filter = ('competition',)
     search_fields = ('name', 'short_name', 'tla')
@@ -93,61 +121,6 @@ class MatchAdmin(admin.ModelAdmin):
                 ('hit_woodwork_home', 'hit_woodwork_away'),
                 ('free_kicks_conceded_home', 'free_kicks_conceded_away'),
                 ('booking_points_home', 'booking_points_away'),
-            ),
-            'classes': ('collapse',)
-        }),
-        ('Betting Odds - 1X2', {
-            'fields': (
-                ('max_odds_home', 'max_odds_draw', 'max_odds_away'),
-                ('avg_odds_home', 'avg_odds_draw', 'avg_odds_away'),
-                ('b365_odds_home', 'b365_odds_draw', 'b365_odds_away'),
-                ('ps_odds_home', 'ps_odds_draw', 'ps_odds_away'),
-                ('wh_odds_home', 'wh_odds_draw', 'wh_odds_away'),
-                ('bf_odds_home', 'bf_odds_draw', 'bf_odds_away'),
-            ),
-            'classes': ('collapse',)
-        }),
-        ('Betting Odds - Over/Under 2.5', {
-            'fields': (
-                ('max_odds_over_25', 'max_odds_under_25'),
-                ('avg_odds_over_25', 'avg_odds_under_25'),
-                ('b365_odds_over_25', 'b365_odds_under_25'),
-                ('ps_odds_over_25', 'ps_odds_under_25'),
-            ),
-            'classes': ('collapse',)
-        }),
-        ('Betting Odds - Asian Handicap', {
-            'fields': (
-                'asian_handicap_size',
-                ('max_odds_ah_home', 'max_odds_ah_away'),
-                ('avg_odds_ah_home', 'avg_odds_ah_away'),
-                ('b365_ah_size', 'b365_odds_ah_home', 'b365_odds_ah_away'),
-                ('ps_odds_ah_home', 'ps_odds_ah_away'),
-            ),
-            'classes': ('collapse',)
-        }),
-        ('Betbrain Aggregates - 1X2', {
-            'fields': (
-                'betbrain_num_bookmakers',
-                ('betbrain_max_odds_home', 'betbrain_max_odds_draw', 'betbrain_max_odds_away'),
-                ('betbrain_avg_odds_home', 'betbrain_avg_odds_draw', 'betbrain_avg_odds_away'),
-            ),
-            'classes': ('collapse',)
-        }),
-        ('Betbrain Aggregates - O/U', {
-            'fields': (
-                'betbrain_num_ou_bookmakers',
-                ('betbrain_max_odds_over_25', 'betbrain_max_odds_under_25'),
-                ('betbrain_avg_odds_over_25', 'betbrain_avg_odds_under_25'),
-            ),
-            'classes': ('collapse',)
-        }),
-        ('Betbrain Aggregates - Asian Handicap', {
-            'fields': (
-                'betbrain_num_ah_bookmakers',
-                'betbrain_ah_size',
-                ('betbrain_max_odds_ah_home', 'betbrain_max_odds_ah_away'),
-                ('betbrain_avg_odds_ah_home', 'betbrain_avg_odds_ah_away'),
             ),
             'classes': ('collapse',)
         }),
