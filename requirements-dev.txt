@@ -1,0 +1,21 @@
+# Incluye todas las dependencias de producción
+-r requirements-production.txt
+
+# Dependencias SOLO para desarrollo (scraping, testing, etc.)
+playwright>=1.40.0
+playwright-stealth>=1.0.6
+aiofiles>=23.2.0
+
+# Testing (opcional)
+pytest>=7.4.0
+pytest-django>=4.5.0
+pytest-asyncio>=0.21.0
+
+# Code quality (opcional)
+black>=23.7.0
+flake8>=6.1.0
+isort>=5.12.0
+
+# Development tools (opcional)
+django-debug-toolbar>=4.2.0
+ipython>=8.14.0
