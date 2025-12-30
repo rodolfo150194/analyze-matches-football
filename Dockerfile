@@ -33,10 +33,19 @@ RUN useradd -m -u 1000 appuser && \
 
 USER appuser
 
+RUN python manage.py collectstatic --noinput || echo "Static collection skipped"
+
 # Expose port
 EXPOSE 8000
 
 
 # Run migrations and start gunicorn directly
-ENTRYPOINT ["/app/entrypoint.sh"]
+CMD python manage.py migrate --noinput && \
+    exec gunicorn football_django.wsgi:application \
+    --bind 0.0.0.0:8000 \
+    --workers 2 \
+    --threads 4 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile -
 
