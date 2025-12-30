@@ -11,7 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Install basic system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     postgresql-client \
@@ -33,26 +33,14 @@ RUN useradd -m -u 1000 appuser && \
 
 USER appuser
 
-# Collect static files (skip if fails)
-RUN python manage.py collectstatic --noinput || echo "Static collection skipped"
-
-# Create staticfiles and media directories with proper permissions
-RUN mkdir -p staticfiles media/teams media/players && \
-    chmod -R 755 staticfiles media
-
 # Expose port
 EXPOSE 8000
 
 
-
 # Run migrations and start gunicorn directly
-CMD python manage.py migrate --noinput && \
-    exec gunicorn football_django.wsgi:application \
+CMD exec gunicorn football_django.wsgi:application \
     --bind 0.0.0.0:8000 \
     --workers 2 \
     --threads 4 \
-    --timeout 120 \
-    --access-logfile - \
-    --error-logfile - \
-    --log-level debug \
-    --capture-output
+    --timeout 120
+
