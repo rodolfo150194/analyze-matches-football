@@ -19,9 +19,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
-COPY requirements.txt .
+# Use production requirements (without Playwright to save space)
+COPY requirements-production.txt .
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r requirements-production.txt
 
 # Copy project files
 COPY . .
@@ -30,12 +31,7 @@ COPY . .
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 
-# Install Playwright system dependencies as root
-RUN playwright install-deps chromium
-
-# Switch to appuser and install Playwright browsers in user space
 USER appuser
-RUN playwright install chromium
 
 # Collect static files (skip if fails)
 RUN python manage.py collectstatic --noinput || echo "Static collection skipped"

@@ -29,6 +29,11 @@ def matches_list(request):
     # Start with all matches
     matches = Match.objects.select_related(
         'competition', 'home_team', 'away_team'
+    ).prefetch_related(
+        'player_performances__player',
+        'player_performances__team',
+        'incidents__player',
+        'incidents__team'
     ).all()
 
     # Apply filters
@@ -168,11 +173,68 @@ def matches_list(request):
                 'result': recent.result
             })
 
+        # Get lineups (player performances)
+        home_lineup = []
+        away_lineup = []
+        for perf in match.player_performances.all():
+            # Calculate pass accuracy if data available
+            pass_accuracy = None
+            if perf.passes_attempted and perf.passes_attempted > 0:
+                pass_accuracy = round((perf.passes_completed / perf.passes_attempted) * 100, 1)
+
+            player_data = {
+                'name': perf.player.name,
+                'shortName': perf.player.short_name,
+                'position': perf.position,
+                'shirtNumber': perf.shirt_number,
+                'started': perf.started,
+                'substitute': perf.substitute,
+                'minutesPlayed': perf.minutes_played,
+                'goals': perf.goals,
+                'assists': perf.assists,
+                'rating': float(perf.rating) if perf.rating else None,
+                'xg': float(perf.xg) if perf.xg else None,
+                'xa': float(perf.xa) if perf.xa else None,
+                'shots': perf.shots,
+                'shotsOnTarget': perf.shots_on_target,
+                'passesCompleted': perf.passes_completed,
+                'passesAttempted': perf.passes_attempted,
+                'passAccuracy': pass_accuracy,
+                'tackles': perf.tackles,
+                'yellowCard': perf.yellow_card,
+                'redCard': perf.red_card,
+            }
+            if perf.team == match.home_team:
+                home_lineup.append(player_data)
+            else:
+                away_lineup.append(player_data)
+
+        # Get match incidents (goals, cards, substitutions)
+        incidents_data = []
+        for incident in match.incidents.all().order_by('time'):
+            incidents_data.append({
+                'type': incident.incident_type,
+                'time': incident.time,
+                'timeAdded': incident.time_added,
+                'player': incident.player.short_name if incident.player else None,
+                'team': incident.team.short_name if incident.team else None,
+                'teamId': incident.team.id if incident.team else None,
+                'assistPlayer': incident.assist_player.short_name if incident.assist_player else None,
+                'playerIn': incident.player_in.short_name if incident.player_in else None,
+                'playerOut': incident.player_out.short_name if incident.player_out else None,
+                'scoreHome': incident.score_home,
+                'scoreAway': incident.score_away,
+            })
+
         matches_data[str(match.id)] = {  # Convert to string for consistent JSON keys
             'homeTeam': match.home_team.name,
             'awayTeam': match.away_team.name,
             'homeTeamShort': match.home_team.short_name,
             'awayTeamShort': match.away_team.short_name,
+            'homeTeamId': match.home_team.id,
+            'awayTeamId': match.away_team.id,
+            'homeTeamCrest': match.home_team.crest_url if match.home_team.crest_url else None,
+            'awayTeamCrest': match.away_team.crest_url if match.away_team.crest_url else None,
             'competition': match.competition.name,
             'date': match.utc_date.strftime('%d/%m/%Y %H:%M') if match.utc_date else '',
             'status': match.get_status_display(),
@@ -180,6 +242,8 @@ def matches_list(request):
             'awayScore': match.away_score,
             'homeScoreHT': match.home_score_ht,
             'awayScoreHT': match.away_score_ht,
+            'referee': match.referee,
+            'venue': match.venue,
             'shots': {'home': match.shots_home, 'away': match.shots_away},
             'shotsOnTarget': {'home': match.shots_on_target_home, 'away': match.shots_on_target_away},
             'corners': {'home': match.corners_home, 'away': match.corners_away},
@@ -191,7 +255,10 @@ def matches_list(request):
             'offsides': {'home': match.offsides_home, 'away': match.offsides_away},
             'headToHead': h2h_data,
             'homeRecent': home_recent_data,
-            'awayRecent': away_recent_data
+            'awayRecent': away_recent_data,
+            'homeLineup': home_lineup,
+            'awayLineup': away_lineup,
+            'incidents': incidents_data,
         }
 
     # Convert teams to JSON-safe dict
@@ -203,9 +270,37 @@ def matches_list(request):
             if not team_id:
                 continue  # Skip if no team_id
 
+            team = team_standing['team']
             ts = team_standing.get('team_stats')
+
+            # Get players for this team (limit to top 20 by appearances)
+            team_players = []
+            if selected_competition and season_int:
+                players_queryset = PlayerStats.objects.filter(
+                    team_id=team_id,
+                    competition=selected_competition,
+                    season=season_int
+                ).select_related('player').order_by('-matches_played', '-goals')[:20]
+
+                for ps in players_queryset:
+                    team_players.append({
+                        'id': ps.player.id,
+                        'name': ps.player.short_name or ps.player.name,
+                        'position': ps.player.position,
+                        'photo': ps.player.photo if ps.player.photo else None,
+                        'matches': ps.matches_played,
+                        'goals': ps.goals,
+                        'assists': ps.assists,
+                        'xg': float(ps.xg) if ps.xg else 0,
+                        'rating': float(ps.passes_completed / ps.passes_attempted * 10) if ps.passes_attempted > 0 else None,
+                        'minutes': ps.minutes_played,
+                    })
+
             teams_data[str(team_id)] = {  # Convert to string for consistent JSON keys
-                'name': team_standing['team'].name,
+                'name': team.name,
+                'shortName': team.short_name,
+                'crestUrl': team.crest_url if team.crest_url else None,
+                'manager': ts.get('manager') if ts and ts.get('manager') else (team.manager if team.manager else 'Unknown'),
                 'played': team_standing['played'],
                 'won': team_standing['won'],
                 'drawn': team_standing['drawn'],
@@ -214,18 +309,26 @@ def matches_list(request):
                 'goalsAgainst': team_standing['goals_against'],
                 'goalDifference': team_standing['goal_difference'],
                 'points': team_standing['points'],
-                'cleanSheets': ts['clean_sheets'] if ts else None,
-                'failedToScore': ts['failed_to_score'] if ts else None,
-                'bttsCount': ts['btts_count'] if ts else None,
-                'over25Count': ts['over_25_count'] if ts else None,
-                'avgGoalsFor': float(ts['avg_goals_for']) if ts and ts['avg_goals_for'] else None,
-                'avgGoalsAgainst': float(ts['avg_goals_against']) if ts and ts['avg_goals_against'] else None,
-                'homeWins': ts['home_wins'] if ts else None,
-                'homeDraws': ts['home_draws'] if ts else None,
-                'homeLosses': ts['home_losses'] if ts else None,
-                'awayWins': ts['away_wins'] if ts else None,
-                'awayDraws': ts['away_draws'] if ts else None,
-                'awayLosses': ts['away_losses'] if ts else None,
+                'cleanSheets': ts['clean_sheets'] if ts else 0,
+                'failedToScore': ts['failed_to_score'] if ts else 0,
+                'bttsCount': ts['btts_count'] if ts else 0,
+                'over25Count': ts['over_25_count'] if ts else 0,
+                'avgGoalsFor': float(ts['avg_goals_for']) if ts and ts['avg_goals_for'] else 0,
+                'avgGoalsAgainst': float(ts['avg_goals_against']) if ts and ts['avg_goals_against'] else 0,
+                'homeWins': ts['home_wins'] if ts else 0,
+                'homeDraws': ts['home_draws'] if ts else 0,
+                'homeLosses': ts['home_losses'] if ts else 0,
+                'homeGoalsFor': ts['home_goals_for'] if ts else 0,
+                'homeGoalsAgainst': ts['home_goals_against'] if ts else 0,
+                'awayWins': ts['away_wins'] if ts else 0,
+                'awayDraws': ts['away_draws'] if ts else 0,
+                'awayLosses': ts['away_losses'] if ts else 0,
+                'awayGoalsFor': ts['away_goals_for'] if ts else 0,
+                'awayGoalsAgainst': ts['away_goals_against'] if ts else 0,
+                'avgXgFor': float(ts['avg_xg_for']) if ts and ts['avg_xg_for'] else 0,
+                'avgXgAgainst': float(ts['avg_xg_against']) if ts and ts['avg_xg_against'] else 0,
+                'xgOverperformance': float(ts['xg_overperformance']) if ts and ts['xg_overperformance'] else 0,
+                'players': team_players,
             }
 
     # Convert players to JSON-safe dict
@@ -372,6 +475,7 @@ def calculate_standings(competition, season):
         if team_id in team_stats_objs:
             ts = team_stats_objs[team_id]
             stats['team_stats'] = {
+                'manager': ts.manager,
                 'clean_sheets': ts.clean_sheets,
                 'failed_to_score': ts.failed_to_score,
                 'btts_count': ts.btts_count,
@@ -381,9 +485,16 @@ def calculate_standings(competition, season):
                 'home_wins': ts.home_wins,
                 'home_draws': ts.home_draws,
                 'home_losses': ts.home_losses,
+                'home_goals_for': ts.home_goals_for,
+                'home_goals_against': ts.home_goals_against,
                 'away_wins': ts.away_wins,
                 'away_draws': ts.away_draws,
                 'away_losses': ts.away_losses,
+                'away_goals_for': ts.away_goals_for,
+                'away_goals_against': ts.away_goals_against,
+                'avg_xg_for': ts.avg_xg_for,
+                'avg_xg_against': ts.avg_xg_against,
+                'xg_overperformance': ts.xg_overperformance,
             }
         else:
             stats['team_stats'] = None
@@ -598,206 +709,4 @@ from django.views.decorators.http import require_http_methods
 from django.core.management import call_command
 
 
-@login_required
-def config_view(request):
-    """Configuration page for imports"""
-    context = {
-        'competitions': ['PL', 'PD', 'BL1', 'SA', 'FL1', 'CL'],
-        'seasons': [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015],
-    }
-    return render(request, 'predictions/config.html', context)
 
-
-@login_required
-@require_http_methods(["POST"])
-def start_import_view(request):
-    """Start background import job"""
-    from predictions.models import ImportJob
-
-    try:
-        # Parse form data
-        competitions = request.POST.get('competitions', '')
-        seasons = request.POST.get('seasons', '')
-        all_data = request.POST.get('all_data') == 'on'
-        teams_only = request.POST.get('teams_only') == 'on'
-        matches_only = request.POST.get('matches_only') == 'on'
-        players_only = request.POST.get('players_only') == 'on'
-        standings_only = request.POST.get('standings_only') == 'on'
-        force = request.POST.get('force') == 'on'
-        dry_run = request.POST.get('dry_run') == 'on'
-
-        # Validate inputs
-        if not competitions or not seasons:
-            return JsonResponse({
-                'success': False,
-                'error': 'Competitions and seasons are required'
-            }, status=400)
-
-        # Determine what to import
-        if all_data:
-            import_teams = True
-            import_matches = True
-            import_players = True
-            import_standings = True
-        else:
-            import_teams = teams_only
-            import_matches = matches_only
-            import_players = players_only
-            import_standings = standings_only
-
-        # Create ImportJob
-        job = ImportJob.objects.create(
-            created_by=request.user,
-            competitions=competitions,
-            seasons=seasons,
-            import_teams=import_teams,
-            import_matches=import_matches,
-            import_players=import_players,
-            import_standings=import_standings,
-            force=force,
-            dry_run=dry_run,
-            status='pending',
-        )
-
-        # Start background thread
-        def run_import_in_thread(job_id):
-            """Run import command in thread"""
-            try:
-                call_command('run_import_job', f'--job-id={job_id}')
-            except Exception as e:
-                # Update job with error
-                try:
-                    job = ImportJob.objects.get(pk=job_id)
-                    job.status = 'failed'
-                    job.error_message = str(e)
-                    job.append_log(f'[ERROR] Thread execution failed: {str(e)}')
-                    job.save()
-                except:
-                    pass
-
-        thread = threading.Thread(target=run_import_in_thread, args=(job.id,), daemon=True)
-        thread.start()
-
-        return JsonResponse({
-            'success': True,
-            'job_id': job.id,
-            'message': 'Import started successfully'
-        })
-
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)
-
-
-@login_required
-def import_progress_sse_view(request, job_id):
-    """Server-Sent Events endpoint for real-time progress"""
-    from predictions.models import ImportJob
-
-    def event_stream():
-        """Generator that yields SSE events"""
-        job = get_object_or_404(ImportJob, pk=job_id)
-        last_log_length = 0
-
-        while True:
-            # Reload job from database
-            job.refresh_from_db()
-
-            # Get new log lines since last check
-            current_logs = job.logs
-            if len(current_logs) > last_log_length:
-                new_logs = current_logs[last_log_length:]
-                last_log_length = len(current_logs)
-
-                # Send new log lines
-                for line in new_logs.split('\n'):
-                    if line.strip():
-                        yield f"data: {json.dumps({'type': 'log', 'message': line})}\n\n"
-
-            # Send status update
-            status_data = {
-                'type': 'status',
-                'status': job.status,
-                'progress': job.progress_percentage,
-                'current_step': job.current_step
-            }
-            yield f"data: {json.dumps(status_data)}\n\n"
-
-            # If job is finished, send completion event and break
-            if job.status in ['completed', 'cancelled', 'failed']:
-                finished_data = {
-                    'type': 'finished',
-                    'status': job.status,
-                    'error': job.error_message
-                }
-                yield f"data: {json.dumps(finished_data)}\n\n"
-                break
-
-            # Check every 500ms
-            time.sleep(0.5)
-
-    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
-    response['Cache-Control'] = 'no-cache'
-    response['X-Accel-Buffering'] = 'no'  # Disable nginx buffering
-    return response
-
-
-@login_required
-@require_http_methods(["POST"])
-def cancel_import_view(request, job_id):
-    """Cancel running import"""
-    from predictions.models import ImportJob
-
-    try:
-        job = get_object_or_404(ImportJob, pk=job_id)
-
-        if job.status == 'running':
-            job.cancel_requested = True
-            job.status = 'cancelled'
-            job.completed_at = timezone.now()
-            job.append_log('[CANCELLED] Import cancelled by user')
-            job.save()
-
-            return JsonResponse({
-                'success': True,
-                'message': 'Import cancelled'
-            })
-        else:
-            return JsonResponse({
-                'success': False,
-                'error': 'Job is not running'
-            }, status=400)
-
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)
-
-
-@login_required
-def import_history_view(request):
-    """Get import history as JSON"""
-    from predictions.models import ImportJob
-
-    jobs = ImportJob.objects.filter(
-        created_by=request.user
-    ).order_by('-created_at')[:50]
-
-    data = []
-    for job in jobs:
-        data.append({
-            'id': job.id,
-            'status': job.status,
-            'competitions': job.competitions,
-            'seasons': job.seasons,
-            'created_at': job.created_at.isoformat(),
-            'started_at': job.started_at.isoformat() if job.started_at else None,
-            'completed_at': job.completed_at.isoformat() if job.completed_at else None,
-            'dry_run': job.dry_run,
-            'error_message': job.error_message,
-        })
-
-    return JsonResponse({'jobs': data})

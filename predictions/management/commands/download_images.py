@@ -19,9 +19,9 @@ from django.core.management.base import BaseCommand
 from django.conf import settings
 from predictions.models import Team, Player
 from predictions.sofascore_api import SofascoreAPI
+from asgiref.sync import sync_to_async
 
-
-import os
+import asyncio
 from pathlib import Path
 import aiofiles
 
@@ -98,11 +98,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"[LIMIT] Maximo {limit} imagenes"))
         self.stdout.write("")
 
-        # Run async download
+        # Run download
+        asyncio.run(self.download_images_async(
             download_teams, download_players, force, dry_run, limit
         ))
 
-    def download_images_async(self, download_teams, download_players,
+    async def download_images_async(self, download_teams, download_players,
                                     force, dry_run, limit):
         """Main async download function"""
         api = SofascoreAPI(delay_min=1, delay_max=2)  # Shorter delays for images
@@ -127,7 +128,7 @@ class Command(BaseCommand):
                 self.stdout.write("LOGOS DE EQUIPOS")
                 self.stdout.write("=" * 80)
 
-                team_stats = self.download_team_logos(
+                team_stats = await self.download_team_logos(
                     api, force, dry_run, limit
                 )
                 stats['teams_downloaded'] = team_stats['downloaded']
@@ -140,7 +141,7 @@ class Command(BaseCommand):
                 self.stdout.write("FOTOS DE JUGADORES")
                 self.stdout.write("=" * 80)
 
-                player_stats = self.download_player_photos(
+                player_stats = await self.download_player_photos(
                     api, force, dry_run, limit
                 )
                 stats['players_downloaded'] = player_stats['downloaded']
@@ -148,7 +149,7 @@ class Command(BaseCommand):
                 stats['players_failed'] = player_stats['failed']
 
         finally:
-            api.close()
+            await api.close()
 
         # Summary
         self.stdout.write("\n" + "=" * 80)
@@ -175,12 +176,12 @@ class Command(BaseCommand):
         teams_dir.mkdir(parents=True, exist_ok=True)
         players_dir.mkdir(parents=True, exist_ok=True)
 
-    def download_team_logos(self, api, force, dry_run, limit):
+    async def download_team_logos(self, api, force, dry_run, limit):
         """Download all team logos"""
         stats = {'downloaded': 0, 'skipped': 0, 'failed': 0}
 
         # Get teams with api_id
-        teams = list)(
+        teams = await sync_to_async(list)(
             Team.objects.filter(api_id__isnull=False).order_by('name')
         )
 
@@ -217,11 +218,11 @@ class Command(BaseCommand):
 
                 # Download image
                 image_url = f"https://api.sofascore.com/api/v1/team/{team_id}/image"
-                success = self.download_image(api, image_url, full_path)
+                success = await self.download_image(api, image_url, full_path)
 
                 if success:
                     # Update database
-                    self._update_team_crest)(team, relative_path)
+                    await self._update_team_crest(team, relative_path)
                     stats['downloaded'] += 1
 
                     if idx % 10 == 0 or idx == 1 or idx == total:
@@ -248,12 +249,12 @@ class Command(BaseCommand):
 
         return stats
 
-    def download_player_photos(self, api, force, dry_run, limit):
+    async def download_player_photos(self, api, force, dry_run, limit):
         """Download all player photos"""
         stats = {'downloaded': 0, 'skipped': 0, 'failed': 0}
 
         # Get players with sofascore_id
-        players = list)(
+        players = await sync_to_async(list)(
             Player.objects.filter(sofascore_id__isnull=False).order_by('name')
         )
 
@@ -291,11 +292,11 @@ class Command(BaseCommand):
 
                 # Download image
                 image_url = f"https://api.sofascore.com/api/v1/player/{player_id}/image"
-                success = self.download_image(api, image_url, full_path)
+                success = await self.download_image(api, image_url, full_path)
 
                 if success:
                     # Update database
-                    self._update_player_photo)(player, relative_path)
+                    await self._update_player_photo(player, relative_path)
                     stats['downloaded'] += 1
 
                     if idx % 50 == 0 or idx == 1 or idx == total:
@@ -323,24 +324,24 @@ class Command(BaseCommand):
 
         return stats
 
-    def download_image(self, api, url, output_path):
+    async def download_image(self, api, url, output_path):
         """
         Download a single image from SofaScore
         Returns True if successful, False otherwise
         """
         try:
-            api._init_browser()
-            api._wait_if_needed()
+            await api._init_browser()
+            await api._wait_if_needed()
 
-            response = api.page.goto(url)
+            response = await api.page.goto(url)
 
             if response.status == 200:
                 # Get image bytes
-                image_bytes = response.body()
+                image_bytes = await response.body()
 
                 # Save to file
                 async with aiofiles.open(output_path, 'wb') as f:
-                    f.write(image_bytes)
+                    await f.write(image_bytes)
 
                 return True
             else:
@@ -349,12 +350,12 @@ class Command(BaseCommand):
         except Exception:
             return False
 
-    def _update_team_crest(self, team, relative_path):
+    async def _update_team_crest(self, team, relative_path):
         """Update team crest_url field"""
         team.crest_url = relative_path
-        team.save(update_fields=['crest_url'])
+        await sync_to_async(team.save)(update_fields=['crest_url'])
 
-    def _update_player_photo(self, player, relative_path):
+    async def _update_player_photo(self, player, relative_path):
         """Update player photo field"""
         player.photo = relative_path
-        player.save(update_fields=['photo'])
+        await sync_to_async(player.save)(update_fields=['photo'])

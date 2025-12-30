@@ -225,6 +225,9 @@ class TeamStats(models.Model):
     season = models.IntegerField()
     calculated_at = models.DateTimeField(default=timezone.now)
 
+    # Manager de la temporada
+    manager = models.CharField(max_length=200, null=True, blank=True)
+
     # Estadísticas generales
     matches_played = models.IntegerField(default=0)
     wins = models.IntegerField(default=0)
@@ -924,6 +927,8 @@ class MatchIncident(models.Model):
             models.Index(fields=['player', 'incident_type']),
             models.Index(fields=['match', 'time']),
         ]
+        # Note: No unique constraint as multiple incidents can happen at same time
+        # (e.g., two yellow cards in same minute). Handled in import logic.
 
     def __str__(self):
         time_str = f"{self.time}'" if not self.time_added else f"{self.time}+{self.time_added}'"

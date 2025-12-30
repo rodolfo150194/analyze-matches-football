@@ -146,6 +146,16 @@
             color: var(--electric-green);
             background: rgba(0, 255, 135, 0.1);
         }
+        .nav-link-custom.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 16px;
+            right: 16px;
+            height: 2px;
+            background: var(--electric-green);
+            border-radius: 2px;
+        }
 
         .user-badge {
             background: rgba(255, 255, 255, 0.05);
@@ -646,7 +656,6 @@
                         <div class="user-menu justify-content-end">
                             <a href="{% url 'predictions:matches_list' %}" class="nav-link-custom">Matches</a>
                             <a href="{% url 'predictions:predictions' %}" class="nav-link-custom active">Predictions</a>
-                            <a href="{% url 'predictions:config' %}" class="nav-link-custom">Config</a>
                             <span class="user-badge">{{ user.username }}</span>
                             <a href="{% url 'predictions:logout' %}" class="logout-btn">Logout</a>
                         </div>

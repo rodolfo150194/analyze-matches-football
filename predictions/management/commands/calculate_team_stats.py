@@ -265,6 +265,9 @@ class Command(BaseCommand):
             stats.form_goals_for = sum(form_gf) / len(form_gf) if form_gf else 0
             stats.form_goals_against = sum(form_ga) / len(form_ga) if form_ga else 0
 
+        # Guardar manager del equipo (nota: será el manager actual, no histórico)
+        stats.manager = team.manager
+
         stats.save()
 
         action = "creada" if created else "actualizada"

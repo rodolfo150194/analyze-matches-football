@@ -36,10 +36,4 @@ urlpatterns = [
     path('matches/', views.matches_list, name='matches_list'),
     path('predictions/', views.predictions_view, name='predictions'),
 
-    # Configuration & Imports
-    path('config/', views.config_view, name='config'),
-    path('config/start-import/', views.start_import_view, name='start_import'),
-    path('config/import-progress/<int:job_id>/', views.import_progress_sse_view, name='import_progress_sse'),
-    path('config/cancel-import/<int:job_id>/', views.cancel_import_view, name='cancel_import'),
-    path('config/import-history/', views.import_history_view, name='import_history'),
 ]

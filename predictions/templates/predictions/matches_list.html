@@ -13,6 +13,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
     <style>
         :root {
             /* Stadium Night Palette */
@@ -719,7 +722,6 @@
                         <div class="user-menu justify-content-end">
                             <a href="{% url 'predictions:matches_list' %}" class="nav-link-custom active">Matches</a>
                             <a href="{% url 'predictions:predictions' %}" class="nav-link-custom">Predictions</a>
-                            <a href="{% url 'predictions:config' %}" class="nav-link-custom">Config</a>
                             <span class="user-badge">{{ user.username }}</span>
                             <a href="{% url 'predictions:logout' %}" class="logout-btn">Logout</a>
                         </div>
@@ -1098,14 +1100,173 @@
             if (match.homeScore !== null && match.awayScore !== null) {
                 html += `
                     <div class="text-center mb-4 p-4" style="background: linear-gradient(135deg, rgba(0, 255, 135, 0.1), rgba(59, 130, 246, 0.1)); border-radius: 16px;">
-                        <div style="font-size: 48px; font-weight: 800; color: var(--electric-green); font-family: 'Sora', sans-serif;">
-                            ${match.homeScore} - ${match.awayScore}
+                        <!-- Teams with logos -->
+                        <div class="d-flex justify-content-center align-items-center gap-4 mb-3">
+                            <div class="text-end" style="flex: 1;">
+                                <div style="font-size: 20px; font-weight: 600; color: var(--white); margin-bottom: 8px;">${match.homeTeamShort}</div>
+                                ${matchesData[matchId].homeTeamCrest ? `<img src="/media/${matchesData[matchId].homeTeamCrest}" alt="${match.homeTeamShort}" style="width: 64px; height: 64px; object-fit: contain;" onerror="this.style.display='none';">` : '<div style="width: 64px; height: 64px; background: rgba(255, 255, 255, 0.05); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 32px;"><i class="fas fa-shield-alt"></i></div>'}
+                            </div>
+                            <div style="font-size: 48px; font-weight: 800; color: var(--electric-green); font-family: 'Sora', sans-serif; min-width: 120px;">
+                                ${match.homeScore} - ${match.awayScore}
+                            </div>
+                            <div class="text-start" style="flex: 1;">
+                                <div style="font-size: 20px; font-weight: 600; color: var(--white); margin-bottom: 8px;">${match.awayTeamShort}</div>
+                                ${matchesData[matchId].awayTeamCrest ? `<img src="/media/${matchesData[matchId].awayTeamCrest}" alt="${match.awayTeamShort}" style="width: 64px; height: 64px; object-fit: contain;" onerror="this.style.display='none';">` : '<div style="width: 64px; height: 64px; background: rgba(255, 255, 255, 0.05); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 32px;"><i class="fas fa-shield-alt"></i></div>'}
+                            </div>
                         </div>
                         ${match.homeScoreHT !== null ? `<div style="color: var(--gray-text); margin-top: 8px;">HT: ${match.homeScoreHT} - ${match.awayScoreHT}</div>` : ''}
                         <div style="color: var(--gray-text); margin-top: 12px;">${match.date} • ${match.competition}</div>
+                `;
+
+                // Show goal scorers organized by team and sorted by time
+                if (match.incidents && match.incidents.length > 0) {
+                    const goals = match.incidents.filter(inc =>
+                        (inc.type === 'goal' || inc.type === 'penalty' || inc.type === 'ownGoal') && inc.player
+                    );
+
+                    if (goals.length > 0) {
+                        html += `<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1);">`;
+                        html += `<div class="row g-3">`;
+
+                        // Function to determine if a goal belongs to home or away team
+                        // Try multiple methods: teamId, team name, or player from lineup
+                        const isHomeGoal = (goal) => {
+                            if (goal.teamId) {
+                                return goal.teamId === matchesData[matchId].homeTeamId;
+                            }
+                            if (goal.team) {
+                                return goal.team === match.homeTeamShort || goal.team === match.homeTeam;
+                            }
+                            // If we have lineups, check if player is in home lineup
+                            if (match.homeLineup && goal.player) {
+                                return match.homeLineup.some(p => p.shortName === goal.player || p.name === goal.player);
+                            }
+                            return false;
+                        };
+
+                        // Group goals by team
+                        const homeGoals = goals.filter(g => isHomeGoal(g));
+                        const awayGoals = goals.filter(g => !isHomeGoal(g));
+
+                        // Sort goals by minute
+                        const sortByTime = (a, b) => {
+                            const timeA = a.time + (a.timeAdded || 0) / 100;
+                            const timeB = b.time + (b.timeAdded || 0) / 100;
+                            return timeA - timeB;
+                        };
+                        homeGoals.sort(sortByTime);
+                        awayGoals.sort(sortByTime);
+
+                        // Home goals column
+                        html += `<div class="col-6">`;
+                        html += `<div style="font-size: 14px; font-weight: 600; color: var(--electric-green); margin-bottom: 12px; text-align: center;"><i class="fas fa-futbol"></i> ${match.homeTeamShort}</div>`;
+                        if (homeGoals.length > 0) {
+                            homeGoals.forEach(goal => {
+                                const timeStr = goal.timeAdded ? `${goal.time}+${goal.timeAdded}'` : `${goal.time}'`;
+                                let icon = '<i class="fas fa-futbol"></i>';
+                                let label = '';
+                                if (goal.type === 'penalty') {
+                                    icon = '<i class="fas fa-futbol"></i>';
+                                    label = '<span style="font-size: 11px; background: rgba(0,255,135,0.2); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">PEN</span>';
+                                } else if (goal.type === 'ownGoal') {
+                                    icon = '<i class="fas fa-shield-alt"></i>';
+                                    label = '<span style="font-size: 11px; background: rgba(239,68,68,0.2); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">OG</span>';
+                                }
+                                html += `
+                                    <div style="background: rgba(0, 255, 135, 0.05); border-left: 3px solid var(--electric-green); padding: 8px 12px; margin-bottom: 8px; border-radius: 6px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <span style="color: var(--electric-green);">${icon}</span>
+                                                <span style="font-weight: 500; margin-left: 8px;">${goal.player || 'Unknown'}</span>
+                                                ${label}
+                                            </div>
+                                            <span style="font-weight: 600; color: var(--electric-green);">${timeStr}</span>
+                                        </div>
+                                        ${goal.assistPlayer ? `<div style="font-size: 12px; color: var(--gray-text); margin-top: 4px; margin-left: 28px;"><i class="fas fa-hands-helping" style="font-size: 10px;"></i> ${goal.assistPlayer}</div>` : ''}
+                                    </div>
+                                `;
+                            });
+                        } else {
+                            html += `<div style="text-align: center; color: var(--gray-text); padding: 20px; font-size: 13px;"><i class="far fa-circle"></i> No goals</div>`;
+                        }
+                        html += `</div>`;
+
+                        // Away goals column
+                        html += `<div class="col-6">`;
+                        html += `<div style="font-size: 14px; font-weight: 600; color: var(--accent-blue); margin-bottom: 12px; text-align: center;"><i class="fas fa-futbol"></i> ${match.awayTeamShort}</div>`;
+                        if (awayGoals.length > 0) {
+                            awayGoals.forEach(goal => {
+                                const timeStr = goal.timeAdded ? `${goal.time}+${goal.timeAdded}'` : `${goal.time}'`;
+                                let icon = '<i class="fas fa-futbol"></i>';
+                                let label = '';
+                                if (goal.type === 'penalty') {
+                                    icon = '<i class="fas fa-futbol"></i>';
+                                    label = '<span style="font-size: 11px; background: rgba(59,130,246,0.2); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">PEN</span>';
+                                } else if (goal.type === 'ownGoal') {
+                                    icon = '<i class="fas fa-shield-alt"></i>';
+                                    label = '<span style="font-size: 11px; background: rgba(239,68,68,0.2); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">OG</span>';
+                                }
+                                html += `
+                                    <div style="background: rgba(59, 130, 246, 0.05); border-left: 3px solid var(--accent-blue); padding: 8px 12px; margin-bottom: 8px; border-radius: 6px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <span style="color: var(--accent-blue);">${icon}</span>
+                                                <span style="font-weight: 500; margin-left: 8px;">${goal.player || 'Unknown'}</span>
+                                                ${label}
+                                            </div>
+                                            <span style="font-weight: 600; color: var(--accent-blue);">${timeStr}</span>
+                                        </div>
+                                        ${goal.assistPlayer ? `<div style="font-size: 12px; color: var(--gray-text); margin-top: 4px; margin-left: 28px;"><i class="fas fa-hands-helping" style="font-size: 10px;"></i> ${goal.assistPlayer}</div>` : ''}
+                                    </div>
+                                `;
+                            });
+                        } else {
+                            html += `<div style="text-align: center; color: var(--gray-text); padding: 20px; font-size: 13px;"><i class="far fa-circle"></i> No goals</div>`;
+                        }
+                        html += `</div>`;
+
+                        html += `</div></div>`;
+                    }
+                }
+
+                html += `
+                        ${match.referee ? `<div style="color: var(--gray-text); margin-top: 12px;"><strong>Referee:</strong> ${match.referee}</div>` : ''}
+                        ${match.venue ? `<div style="color: var(--gray-text); margin-top: 4px;"><strong>Venue:</strong> ${match.venue}</div>` : ''}
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="text-center mb-4 p-4" style="background: linear-gradient(135deg, rgba(0, 255, 135, 0.1), rgba(59, 130, 246, 0.1)); border-radius: 16px;">
+                        <div style="color: var(--gray-text); margin-top: 12px;">${match.date} • ${match.competition}</div>
+                        ${match.referee ? `<div style="color: var(--gray-text); margin-top: 8px;"><strong>Referee:</strong> ${match.referee}</div>` : ''}
+                        ${match.venue ? `<div style="color: var(--gray-text); margin-top: 4px;"><strong>Venue:</strong> ${match.venue}</div>` : ''}
                     </div>
                 `;
             }
+
+            // Tabs navigation
+            html += `
+                <ul class="nav nav-tabs mb-3" role="tablist" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                    <li class="nav-item" role="presentation">
+                        <button class="tab-button active" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab">Statistics</button>
+                    </li>
+                    ${match.incidents && match.incidents.length > 0 ? `
+                    <li class="nav-item ms-2" role="presentation">
+                        <button class="tab-button" id="incidents-tab" data-bs-toggle="tab" data-bs-target="#incidents" type="button" role="tab">Events</button>
+                    </li>` : ''}
+                    ${match.homeLineup && match.homeLineup.length > 0 ? `
+                    <li class="nav-item ms-2" role="presentation">
+                        <button class="tab-button" id="lineups-tab" data-bs-toggle="tab" data-bs-target="#lineups" type="button" role="tab">Lineups</button>
+                    </li>` : ''}
+                    <li class="nav-item ms-2" role="presentation">
+                        <button class="tab-button" id="h2h-tab" data-bs-toggle="tab" data-bs-target="#h2h" type="button" role="tab">H2H</button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <!-- Statistics Tab -->
+                    <div class="tab-pane fade show active" id="stats" role="tabpanel">
+            `;
 
             // Match stats
             if (match.shots.home !== null || match.possession.home !== null) {
@@ -1121,9 +1282,126 @@
                 if (match.redCards.home !== null && (match.redCards.home > 0 || match.redCards.away > 0)) html += `<div class="col-6 col-md-3"><div class="stat-item"><span class="stat-value" style="color: var(--danger-red);">${match.redCards.home} - ${match.redCards.away}</span><span class="stat-label">Red Cards</span></div></div>`;
 
                 html += '</div>';
+            } else {
+                html += '<p class="text-center" style="color: var(--gray-text);">No statistics available</p>';
             }
 
-            // Head to head
+            html += '</div>'; // Close stats tab
+
+            // Incidents Tab
+            if (match.incidents && match.incidents.length > 0) {
+                html += '<div class="tab-pane fade" id="incidents" role="tabpanel">';
+                html += '<div style="max-height: 400px; overflow-y: auto;">';
+
+                match.incidents.forEach(inc => {
+                    const timeStr = inc.timeAdded ? `${inc.time}+${inc.timeAdded}'` : `${inc.time}'`;
+                    let iconColor = 'var(--electric-green)';
+                    let icon = '<i class="fas fa-futbol"></i>';
+
+                    if (inc.type === 'goal' || inc.type === 'penalty') {
+                        icon = '<i class="fas fa-futbol"></i>';
+                        iconColor = 'var(--electric-green)';
+                    } else if (inc.type === 'ownGoal') {
+                        icon = '<i class="fas fa-shield-alt"></i>';
+                        iconColor = 'var(--danger-red)';
+                    } else if (inc.type === 'yellowCard') {
+                        icon = '<i class="fas fa-square" style="color: #FCD34D;"></i>';
+                        iconColor = 'var(--warning-amber)';
+                    } else if (inc.type === 'redCard' || inc.type === 'yellowRedCard') {
+                        icon = '<i class="fas fa-square" style="color: #EF4444;"></i>';
+                        iconColor = 'var(--danger-red)';
+                    } else if (inc.type === 'substitution') {
+                        icon = '<i class="fas fa-exchange-alt"></i>';
+                        iconColor = 'var(--accent-blue)';
+                    } else if (inc.type === 'var') {
+                        icon = '<i class="fas fa-tv"></i>';
+                        iconColor = 'var(--accent-blue)';
+                    }
+
+                    // Skip if essential data is missing
+                    if (!inc.player && !inc.playerOut && !inc.playerIn && inc.type !== 'injuryTime') {
+                        return; // Skip this incident
+                    }
+
+                    html += `
+                        <div class="d-flex align-items-start mb-3 p-3" style="background: rgba(255, 255, 255, 0.03); border-radius: 12px; border-left: 3px solid ${iconColor};">
+                            <div style="font-size: 20px; margin-right: 12px; color: ${iconColor};">${icon}</div>
+                            <div class="flex-grow-1">
+                                <div><strong style="color: var(--electric-green);">${timeStr}</strong>${inc.team ? ` - <span style="color: var(--gray-text);">${inc.team}</span>` : ''}</div>
+                                ${inc.type === 'substitution' ?
+                                    `<div style="color: var(--white);">OUT: ${inc.playerOut || 'Unknown'} → IN: ${inc.playerIn || 'Unknown'}</div>` :
+                                    inc.player ? `<div style="color: var(--white);">${inc.player}</div>` : ''
+                                }
+                                ${inc.assistPlayer ? `<div style="color: var(--gray-text); font-size: 13px;">Assist: ${inc.assistPlayer}</div>` : ''}
+                                ${inc.scoreHome !== null ? `<div style="color: var(--gray-text); font-size: 13px; margin-top: 4px;">Score: ${inc.scoreHome} - ${inc.scoreAway}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div></div>';
+            }
+
+            // Lineups Tab
+            if (match.homeLineup && match.homeLineup.length > 0) {
+                html += '<div class="tab-pane fade" id="lineups" role="tabpanel">';
+                html += '<div class="row">';
+
+                // Home lineup
+                html += `<div class="col-md-6"><h6 style="color: var(--electric-green); margin-bottom: 16px;">${match.homeTeamShort}</h6>`;
+                html += '<div style="max-height: 400px; overflow-y: auto;">';
+
+                // Starters
+                const homeStarters = match.homeLineup.filter(p => p.started);
+                const homeSubs = match.homeLineup.filter(p => p.substitute);
+
+                if (homeStarters.length > 0) {
+                    html += '<div style="margin-bottom: 20px;"><div style="color: var(--gray-text); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Starting XI</div>';
+                    homeStarters.forEach(player => {
+                        html += renderPlayer(player, match.incidents);
+                    });
+                    html += '</div>';
+                }
+
+                if (homeSubs.length > 0) {
+                    html += '<div><div style="color: var(--gray-text); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Substitutes</div>';
+                    homeSubs.forEach(player => {
+                        html += renderPlayer(player, match.incidents);
+                    });
+                    html += '</div>';
+                }
+
+                html += '</div></div>';
+
+                // Away lineup
+                html += `<div class="col-md-6"><h6 style="color: var(--accent-blue); margin-bottom: 16px;">${match.awayTeamShort}</h6>`;
+                html += '<div style="max-height: 400px; overflow-y: auto;">';
+
+                const awayStarters = match.awayLineup.filter(p => p.started);
+                const awaySubs = match.awayLineup.filter(p => p.substitute);
+
+                if (awayStarters.length > 0) {
+                    html += '<div style="margin-bottom: 20px;"><div style="color: var(--gray-text); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Starting XI</div>';
+                    awayStarters.forEach(player => {
+                        html += renderPlayer(player, match.incidents);
+                    });
+                    html += '</div>';
+                }
+
+                if (awaySubs.length > 0) {
+                    html += '<div><div style="color: var(--gray-text); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Substitutes</div>';
+                    awaySubs.forEach(player => {
+                        html += renderPlayer(player, match.incidents);
+                    });
+                    html += '</div>';
+                }
+
+                html += '</div></div>';
+                html += '</div></div>';
+            }
+
+            // H2H Tab
+            html += '<div class="tab-pane fade" id="h2h" role="tabpanel">';
             if (match.headToHead && match.headToHead.length > 0) {
                 html += '<h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin: 24px 0 16px;">Head to Head</h6>';
                 html += '<div style="overflow-x: auto;"><table class="standings-table"><tbody>';
@@ -1131,10 +1409,55 @@
                     html += `<tr><td style="color: var(--gray-text);">${h2h.date}</td><td class="text-end">${h2h.homeTeam}</td><td class="text-center"><strong>${h2h.homeScore} - ${h2h.awayScore}</strong></td><td>${h2h.awayTeam}</td></tr>`;
                 });
                 html += '</tbody></table></div>';
+            } else {
+                html += '<p class="text-center" style="color: var(--gray-text);">No head-to-head history available</p>';
             }
+            html += '</div>';
+
+            html += '</div>'; // Close tab-content
 
             document.getElementById('modalMatchBody').innerHTML = html;
             modal.show();
+        }
+
+        function renderPlayer(player, incidents) {
+            let html = `
+                <div class="d-flex align-items-center mb-2 p-2" style="background: rgba(255, 255, 255, 0.02); border-radius: 8px;">
+                    <div style="min-width: 30px; font-weight: 600; color: var(--electric-green);">${player.shirtNumber || '-'}</div>
+                    <div class="flex-grow-1">
+                        <div style="font-weight: 500;">${player.shortName}</div>
+                        <div style="font-size: 11px; color: var(--gray-text);">${player.position}`;
+
+            if (player.minutesPlayed) html += ` • ${player.minutesPlayed}'`;
+
+            // Check for substitutions
+            if (incidents) {
+                const subOut = incidents.find(inc => inc.type === 'substitution' && inc.playerOut === player.shortName);
+                const subIn = incidents.find(inc => inc.type === 'substitution' && inc.playerIn === player.shortName);
+
+                if (subOut) {
+                    const timeStr = subOut.timeAdded ? `${subOut.time}+${subOut.timeAdded}'` : `${subOut.time}'`;
+                    html += ` • <i class="fas fa-arrow-down" style="color: var(--danger-red);"></i>${timeStr}`;
+                } else if (subIn) {
+                    const timeStr = subIn.timeAdded ? `${subIn.time}+${subIn.timeAdded}'` : `${subIn.time}'`;
+                    html += ` • <i class="fas fa-arrow-up" style="color: var(--success-green);"></i>${timeStr}`;
+                }
+            }
+
+            html += `</div></div>`;
+
+            if (player.rating) {
+                const ratingColor = player.rating >= 7.5 ? 'var(--success-green)' : player.rating >= 6.5 ? 'var(--electric-green)' : 'var(--warning-amber)';
+                html += `<div style="min-width: 40px; text-align: center; font-weight: 700; color: ${ratingColor};">${player.rating.toFixed(1)}</div>`;
+            }
+
+            if (player.goals > 0) html += `<div style="margin-left: 8px;"><i class="fas fa-futbol" style="color: var(--electric-green);"></i>×${player.goals}</div>`;
+            if (player.assists > 0) html += `<div style="margin-left: 8px;"><i class="fas fa-hands-helping" style="color: var(--accent-blue);"></i>×${player.assists}</div>`;
+            if (player.yellowCard) html += `<div style="margin-left: 8px;"><i class="fas fa-square" style="color: #FCD34D;"></i></div>`;
+            if (player.redCard) html += `<div style="margin-left: 8px;"><i class="fas fa-square" style="color: #EF4444;"></i></div>`;
+
+            html += `</div>`;
+            return html;
         }
 
         function showTeamModal(teamId) {
@@ -1144,22 +1467,143 @@
             const modal = new bootstrap.Modal(document.getElementById('teamModal'));
             document.getElementById('modalTeamTitle').textContent = team.name;
 
-            let html = `
-                <div class="row g-3 mb-4">
-                    <div class="col-4"><div class="stat-item"><span class="stat-value">${team.played}</span><span class="stat-label">Played</span></div></div>
-                    <div class="col-4"><div class="stat-item"><span class="stat-value">${team.points}</span><span class="stat-label">Points</span></div></div>
-                    <div class="col-4"><div class="stat-item"><span class="stat-value">${team.goalDifference > 0 ? '+' : ''}${team.goalDifference}</span><span class="stat-label">Goal Diff</span></div></div>
+            // Set title with logo and manager
+            const titleHtml = `
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    ${team.crestUrl ? `<img src="/media/${team.crestUrl}" alt="${team.name}" style="width: 48px; height: 48px; object-fit: contain;" onerror="this.style.display='none';">` : ''}
+                    <div>
+                        <div class="modal-title">${team.name}</div>
+                        <div style="font-size: 14px; color: var(--gray-text); margin-top: 4px;">Manager: ${team.manager}</div>
+                    </div>
                 </div>
-                <h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin: 24px 0 16px;">Results</h6>
-                <div class="row g-3 mb-4">
-                    <div class="col-4"><div class="stat-item"><span class="stat-value" style="color: var(--success-green);">${team.won}</span><span class="stat-label">Wins</span></div></div>
-                    <div class="col-4"><div class="stat-item"><span class="stat-value" style="color: var(--warning-amber);">${team.drawn}</span><span class="stat-label">Draws</span></div></div>
-                    <div class="col-4"><div class="stat-item"><span class="stat-value" style="color: var(--danger-red);">${team.lost}</span><span class="stat-label">Losses</span></div></div>
+            `;
+            document.getElementById('modalTeamTitle').innerHTML = titleHtml;
+
+            // Create tabbed interface
+            let html = `
+                <!-- Tabs -->
+                <div class="d-flex gap-2 mb-4" style="flex-wrap: wrap;">
+                    <button class="tab-button active" onclick="switchTeamTab('overview')">Overview</button>
+                    <button class="tab-button" onclick="switchTeamTab('stats')">Statistics</button>
+                    <button class="tab-button" onclick="switchTeamTab('squad')">Squad</button>
+                </div>
+
+                <!-- Overview Tab -->
+                <div id="team-tab-overview" class="team-tab-content">
+                    <div class="row g-3 mb-4">
+                        <div class="col-4"><div class="stat-item"><span class="stat-value">${team.played}</span><span class="stat-label">Played</span></div></div>
+                        <div class="col-4"><div class="stat-item"><span class="stat-value">${team.points}</span><span class="stat-label">Points</span></div></div>
+                        <div class="col-4"><div class="stat-item"><span class="stat-value">${team.goalDifference > 0 ? '+' : ''}${team.goalDifference}</span><span class="stat-label">Goal Diff</span></div></div>
+                    </div>
+
+                    <h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin: 24px 0 16px;">Results</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-4"><div class="stat-item"><span class="stat-value" style="color: var(--success-green);">${team.won}</span><span class="stat-label">Wins</span></div></div>
+                        <div class="col-4"><div class="stat-item"><span class="stat-value" style="color: var(--warning-amber);">${team.drawn}</span><span class="stat-label">Draws</span></div></div>
+                        <div class="col-4"><div class="stat-item"><span class="stat-value" style="color: var(--danger-red);">${team.lost}</span><span class="stat-label">Losses</span></div></div>
+                    </div>
+
+                    <h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin: 24px 0 16px;">Goals</h6>
+                    <div class="row g-3">
+                        <div class="col-3"><div class="stat-item"><span class="stat-value">${team.goalsFor}</span><span class="stat-label">Goals For</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value">${team.goalsAgainst}</span><span class="stat-label">Goals Against</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value">${team.avgGoalsFor.toFixed(2)}</span><span class="stat-label">Avg For</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value">${team.avgGoalsAgainst.toFixed(2)}</span><span class="stat-label">Avg Against</span></div></div>
+                    </div>
+                </div>
+
+                <!-- Statistics Tab -->
+                <div id="team-tab-stats" class="team-tab-content" style="display: none;">
+                    <h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin-bottom: 16px;">Home Performance</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-3"><div class="stat-item"><span class="stat-value" style="color: var(--success-green);">${team.homeWins}</span><span class="stat-label">Wins</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value" style="color: var(--warning-amber);">${team.homeDraws}</span><span class="stat-label">Draws</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value" style="color: var(--danger-red);">${team.homeLosses}</span><span class="stat-label">Losses</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value">${team.homeGoalsFor}-${team.homeGoalsAgainst}</span><span class="stat-label">Goals</span></div></div>
+                    </div>
+
+                    <h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin: 24px 0 16px;">Away Performance</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-3"><div class="stat-item"><span class="stat-value" style="color: var(--success-green);">${team.awayWins}</span><span class="stat-label">Wins</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value" style="color: var(--warning-amber);">${team.awayDraws}</span><span class="stat-label">Draws</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value" style="color: var(--danger-red);">${team.awayLosses}</span><span class="stat-label">Losses</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value">${team.awayGoalsFor}-${team.awayGoalsAgainst}</span><span class="stat-label">Goals</span></div></div>
+                    </div>
+
+                    <h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin: 24px 0 16px;">Advanced Metrics</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-3"><div class="stat-item"><span class="stat-value">${team.cleanSheets}</span><span class="stat-label">Clean Sheets</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value">${team.failedToScore}</span><span class="stat-label">Failed to Score</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value">${team.bttsCount}</span><span class="stat-label">BTTS</span></div></div>
+                        <div class="col-3"><div class="stat-item"><span class="stat-value">${team.over25Count}</span><span class="stat-label">Over 2.5</span></div></div>
+                    </div>
+
+                    <h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin: 24px 0 16px;">Expected Goals (xG)</h6>
+                    <div class="row g-3">
+                        <div class="col-4"><div class="stat-item"><span class="stat-value">${team.avgXgFor.toFixed(2)}</span><span class="stat-label">Avg xG For</span></div></div>
+                        <div class="col-4"><div class="stat-item"><span class="stat-value">${team.avgXgAgainst.toFixed(2)}</span><span class="stat-label">Avg xG Against</span></div></div>
+                        <div class="col-4"><div class="stat-item"><span class="stat-value" style="color: ${team.xgOverperformance >= 0 ? 'var(--success-green)' : 'var(--danger-red)'};">${team.xgOverperformance >= 0 ? '+' : ''}${team.xgOverperformance.toFixed(2)}</span><span class="stat-label">xG Diff</span></div></div>
+                    </div>
+                </div>
+
+                <!-- Squad Tab -->
+                <div id="team-tab-squad" class="team-tab-content" style="display: none;">
+                    ${team.players && team.players.length > 0 ? `
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            <table class="standings-table">
+                                <thead>
+                                    <tr>
+                                        <th>Player</th>
+                                        <th class="text-center">Pos</th>
+                                        <th class="text-center">Apps</th>
+                                        <th class="text-center">G</th>
+                                        <th class="text-center">A</th>
+                                        <th class="text-center">xG</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${team.players.map(player => `
+                                        <tr>
+                                            <td>
+                                                <div style="display: flex; align-items: center; gap: 8px;">
+                                                    ${player.photo ? `<img src="/media/${player.photo}" alt="${player.name}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(0, 255, 135, 0.3);" onerror="this.onerror=null; this.parentNode.innerHTML='<div style=\\'width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: center; font-size: 14px;\\><i class=\\'fas fa-user\\'></i></div>';">` : '<div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-user"></i></div>'}
+                                                    <span style="font-weight: 500;">${player.name}</span>
+                                                </div>
+                                            </td>
+                                            <td class="text-center" style="color: var(--gray-text);">${player.position}</td>
+                                            <td class="text-center">${player.matches}</td>
+                                            <td class="text-center"><strong style="color: var(--electric-green);">${player.goals}</strong></td>
+                                            <td class="text-center">${player.assists}</td>
+                                            <td class="text-center">${player.xg.toFixed(1)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : '<p class="text-center" style="color: var(--gray-text); padding: 40px;">No squad data available</p>'}
                 </div>
             `;
 
             document.getElementById('modalTeamBody').innerHTML = html;
             modal.show();
+        }
+
+        function switchTeamTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.team-tab-content').forEach(tab => {
+                tab.style.display = 'none';
+            });
+
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(`team-tab-${tabName}`).style.display = 'block';
+
+            // Add active class to clicked button
+            event.target.classList.add('active');
         }
 
         function showPlayerModal(playerId) {

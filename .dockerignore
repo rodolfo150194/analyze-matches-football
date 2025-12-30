@@ -50,6 +50,11 @@ media/
 *.pkl
 predictions/ml/*.pkl
 
+# Playwright cache (VERY LARGE - not needed in production)
+.playwright/
+playwright-*
+ms-playwright/
+
 # Logs
 *.log
 logs/
