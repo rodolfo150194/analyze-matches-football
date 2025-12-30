@@ -16,6 +16,9 @@
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
     <style>
         :root {
             /* Stadium Night Palette */
@@ -1258,6 +1261,10 @@
                     <li class="nav-item ms-2" role="presentation">
                         <button class="tab-button" id="lineups-tab" data-bs-toggle="tab" data-bs-target="#lineups" type="button" role="tab">Lineups</button>
                     </li>` : ''}
+                    ${match.momentumGraph ? `
+                    <li class="nav-item ms-2" role="presentation">
+                        <button class="tab-button" id="momentum-tab" data-bs-toggle="tab" data-bs-target="#momentum" type="button" role="tab">Momentum</button>
+                    </li>` : ''}
                     <li class="nav-item ms-2" role="presentation">
                         <button class="tab-button" id="h2h-tab" data-bs-toggle="tab" data-bs-target="#h2h" type="button" role="tab">H2H</button>
                     </li>
@@ -1400,10 +1407,213 @@
                 html += '</div></div>';
             }
 
+            // Momentum Tab
+            if (match.momentumGraph && match.momentumGraph.graphPoints) {
+                html += '<div class="tab-pane fade" id="momentum" role="tabpanel">';
+                html += `
+                    <div style="background: rgba(255, 255, 255, 0.02); padding: 20px; border-radius: 12px;">
+                        <h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin-bottom: 16px;">
+                            <i class="fas fa-chart-area"></i> Match Momentum
+                        </h6>
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="momentumChart-${matchId}"></canvas>
+                        </div>
+                        <div class="text-center mt-3" style="color: var(--gray-text); font-size: 12px;">
+                            <span style="color: var(--electric-green);"><i class="fas fa-square"></i> ${match.homeTeamShort}</span>
+                            <span style="margin: 0 20px;">•</span>
+                            <span style="color: var(--accent-blue);"><i class="fas fa-square"></i> ${match.awayTeamShort}</span>
+                        </div>
+                    </div>
+                `;
+
+                // Show best players if available
+                if (match.bestPlayers) {
+                    html += `
+                        <div style="background: rgba(255, 255, 255, 0.02); padding: 20px; border-radius: 12px; margin-top: 20px;">
+                            <h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin-bottom: 16px;">
+                                <i class="fas fa-star"></i> Best Players
+                            </h6>
+                            <div class="row">
+                    `;
+
+                    if (match.bestPlayers.bestHomeTeamPlayer) {
+                        const homePlayer = match.bestPlayers.bestHomeTeamPlayer;
+                        html += `
+                            <div class="col-md-6 mb-3">
+                                <div style="background: rgba(0, 255, 135, 0.05); padding: 16px; border-radius: 12px; border-left: 3px solid var(--electric-green);">
+                                    <div style="color: var(--electric-green); font-size: 12px; margin-bottom: 8px;">${match.homeTeamShort}</div>
+                                    <div style="font-weight: 600; font-size: 16px;">${homePlayer.player.name}</div>
+                                    <div style="color: var(--gray-text); font-size: 13px; margin-top: 4px;">${homePlayer.player.position}</div>
+                                    ${homePlayer.value ? `<div style="margin-top: 8px;"><span style="background: var(--electric-green); color: var(--night-sky); padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 14px;">★ ${homePlayer.value}</span></div>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    if (match.bestPlayers.bestAwayTeamPlayer) {
+                        const awayPlayer = match.bestPlayers.bestAwayTeamPlayer;
+                        html += `
+                            <div class="col-md-6 mb-3">
+                                <div style="background: rgba(59, 130, 246, 0.05); padding: 16px; border-radius: 12px; border-left: 3px solid var(--accent-blue);">
+                                    <div style="color: var(--accent-blue); font-size: 12px; margin-bottom: 8px;">${match.awayTeamShort}</div>
+                                    <div style="font-weight: 600; font-size: 16px;">${awayPlayer.player.name}</div>
+                                    <div style="color: var(--gray-text); font-size: 13px; margin-top: 4px;">${awayPlayer.player.position}</div>
+                                    ${awayPlayer.value ? `<div style="margin-top: 8px;"><span style="background: var(--accent-blue); color: var(--night-sky); padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 14px;">★ ${awayPlayer.value}</span></div>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += '</div>';
+            }
+
             // H2H Tab
             html += '<div class="tab-pane fade" id="h2h" role="tabpanel">';
             if (match.headToHead && match.headToHead.length > 0) {
-                html += '<h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin: 24px 0 16px;">Head to Head</h6>';
+                // Calculate H2H statistics
+                const h2hStats = calculateH2HStats(match.headToHead, match.homeTeamShort, match.awayTeamShort);
+
+                // Always show statistics (both for upcoming and finished matches)
+                if (h2hStats.total > 0) {
+
+                    html += `
+                        <div style="background: rgba(255, 255, 255, 0.02); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                            <h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin-bottom: 16px;">
+                                <i class="fas fa-chart-bar"></i> H2H Statistics (Last ${h2hStats.total} matches)
+                            </h6>
+                            <div class="row g-3">
+                    `;
+
+                    // BTTS
+                    if (h2hStats.btts !== null) {
+                        const bttsPercentage = ((h2hStats.btts / h2hStats.total) * 100).toFixed(0);
+                        html += `
+                            <div class="col-6 col-md-4">
+                                <div style="background: rgba(0, 255, 135, 0.05); padding: 12px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 700; color: var(--electric-green);">${h2hStats.btts}/${h2hStats.total}</div>
+                                    <div style="font-size: 11px; color: var(--gray-text); margin-top: 4px;">BTTS</div>
+                                    <div style="font-size: 10px; color: var(--gray-text); margin-top: 2px;">${bttsPercentage}%</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Over 2.5
+                    if (h2hStats.over25 !== null) {
+                        const over25Percentage = ((h2hStats.over25 / h2hStats.total) * 100).toFixed(0);
+                        html += `
+                            <div class="col-6 col-md-4">
+                                <div style="background: rgba(59, 130, 246, 0.05); padding: 12px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 700; color: var(--accent-blue);">${h2hStats.over25}/${h2hStats.total}</div>
+                                    <div style="font-size: 11px; color: var(--gray-text); margin-top: 4px;">Over 2.5</div>
+                                    <div style="font-size: 10px; color: var(--gray-text); margin-top: 2px;">${over25Percentage}%</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // First to score (Home)
+                    if (h2hStats.firstToScoreHome !== null && h2hStats.firstToScoreHome > 0) {
+                        const percentage = ((h2hStats.firstToScoreHome / h2hStats.gamesWithGoals) * 100).toFixed(0);
+                        const homeCrest = matchesData[matchId].homeTeamCrest ?
+                            `<img src="/media/${matchesData[matchId].homeTeamCrest}" alt="${match.homeTeamShort}" style="width: 20px; height: 20px; object-fit: contain; vertical-align: middle;" onerror="this.outerHTML='${match.homeTeamShort}';">` :
+                            match.homeTeamShort;
+                        html += `
+                            <div class="col-6 col-md-4">
+                                <div style="background: rgba(0, 255, 135, 0.05); padding: 12px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 700; color: var(--electric-green);">${h2hStats.firstToScoreHome}/${h2hStats.gamesWithGoals}</div>
+                                    <div style="font-size: 11px; color: var(--gray-text); margin-top: 4px;">1st Goal ${homeCrest}</div>
+                                    <div style="font-size: 10px; color: var(--gray-text); margin-top: 2px;">${percentage}%</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // First to score (Away)
+                    if (h2hStats.firstToScoreAway !== null && h2hStats.firstToScoreAway > 0) {
+                        const percentage = ((h2hStats.firstToScoreAway / h2hStats.gamesWithGoals) * 100).toFixed(0);
+                        const awayCrest = matchesData[matchId].awayTeamCrest ?
+                            `<img src="/media/${matchesData[matchId].awayTeamCrest}" alt="${match.awayTeamShort}" style="width: 20px; height: 20px; object-fit: contain; vertical-align: middle;" onerror="this.outerHTML='${match.awayTeamShort}';">` :
+                            match.awayTeamShort;
+                        html += `
+                            <div class="col-6 col-md-4">
+                                <div style="background: rgba(59, 130, 246, 0.05); padding: 12px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 700; color: var(--accent-blue);">${h2hStats.firstToScoreAway}/${h2hStats.gamesWithGoals}</div>
+                                    <div style="font-size: 11px; color: var(--gray-text); margin-top: 4px;">1st Goal ${awayCrest}</div>
+                                    <div style="font-size: 10px; color: var(--gray-text); margin-top: 2px;">${percentage}%</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Home wins
+                    if (h2hStats.homeWins !== null) {
+                        const percentage = ((h2hStats.homeWins / h2hStats.total) * 100).toFixed(0);
+                        html += `
+                            <div class="col-6 col-md-4">
+                                <div style="background: rgba(0, 255, 135, 0.05); padding: 12px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 700; color: var(--electric-green);">${h2hStats.homeWins}/${h2hStats.total}</div>
+                                    <div style="font-size: 11px; color: var(--gray-text); margin-top: 4px;">${match.homeTeamShort} Wins</div>
+                                    <div style="font-size: 10px; color: var(--gray-text); margin-top: 2px;">${percentage}%</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Away wins
+                    if (h2hStats.awayWins !== null) {
+                        const percentage = ((h2hStats.awayWins / h2hStats.total) * 100).toFixed(0);
+                        html += `
+                            <div class="col-6 col-md-4">
+                                <div style="background: rgba(59, 130, 246, 0.05); padding: 12px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 700; color: var(--accent-blue);">${h2hStats.awayWins}/${h2hStats.total}</div>
+                                    <div style="font-size: 11px; color: var(--gray-text); margin-top: 4px;">${match.awayTeamShort} Wins</div>
+                                    <div style="font-size: 10px; color: var(--gray-text); margin-top: 2px;">${percentage}%</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Draws
+                    if (h2hStats.draws !== null) {
+                        const percentage = ((h2hStats.draws / h2hStats.total) * 100).toFixed(0);
+                        html += `
+                            <div class="col-6 col-md-4">
+                                <div style="background: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 700; color: var(--white);">${h2hStats.draws}/${h2hStats.total}</div>
+                                    <div style="font-size: 11px; color: var(--gray-text); margin-top: 4px;">Draws</div>
+                                    <div style="font-size: 10px; color: var(--gray-text); margin-top: 2px;">${percentage}%</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Average goals
+                    if (h2hStats.avgGoals !== null) {
+                        html += `
+                            <div class="col-6 col-md-4">
+                                <div style="background: rgba(245, 158, 11, 0.05); padding: 12px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 700; color: var(--warning-amber);">${h2hStats.avgGoals.toFixed(1)}</div>
+                                    <div style="font-size: 11px; color: var(--gray-text); margin-top: 4px;">Avg Goals</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Recent matches table
+                html += '<h6 style="color: var(--gray-text); text-transform: uppercase; font-size: 12px; margin: 24px 0 16px;">Recent Encounters</h6>';
                 html += '<div style="overflow-x: auto;"><table class="standings-table"><tbody>';
                 match.headToHead.forEach(h2h => {
                     html += `<tr><td style="color: var(--gray-text);">${h2h.date}</td><td class="text-end">${h2h.homeTeam}</td><td class="text-center"><strong>${h2h.homeScore} - ${h2h.awayScore}</strong></td><td>${h2h.awayTeam}</td></tr>`;
@@ -1417,7 +1627,235 @@
             html += '</div>'; // Close tab-content
 
             document.getElementById('modalMatchBody').innerHTML = html;
+
+            // Render momentum chart if data exists
+            if (match.momentumGraph && match.momentumGraph.graphPoints) {
+                setTimeout(() => renderMomentumChart(matchId, match), 100);
+            }
+
             modal.show();
+        }
+
+        function calculateH2HStats(h2hMatches, homeTeam, awayTeam) {
+            const stats = {
+                total: h2hMatches.length,
+                btts: 0,
+                over25: 0,
+                homeWins: 0,
+                awayWins: 0,
+                draws: 0,
+                firstToScoreHome: 0,
+                firstToScoreAway: 0,
+                gamesWithGoals: 0,
+                totalGoals: 0,
+                avgGoals: null
+            };
+
+            h2hMatches.forEach(match => {
+                const homeScore = match.homeScore;
+                const awayScore = match.awayScore;
+                const totalGoals = homeScore + awayScore;
+
+                stats.totalGoals += totalGoals;
+
+                // Both teams scored
+                if (homeScore > 0 && awayScore > 0) {
+                    stats.btts++;
+                }
+
+                // Over 2.5 goals
+                if (totalGoals > 2.5) {
+                    stats.over25++;
+                }
+
+                // Result (need to determine which is "home" and "away" in the context of current match)
+                // Check if current homeTeam was home in this H2H match
+                const isCurrentHomeTeamHome = match.homeTeam === homeTeam;
+
+                if (isCurrentHomeTeamHome) {
+                    // Current home team was home in H2H match
+                    if (homeScore > awayScore) stats.homeWins++;
+                    else if (homeScore < awayScore) stats.awayWins++;
+                    else stats.draws++;
+
+                    // First to score
+                    if (homeScore > 0 || awayScore > 0) {
+                        stats.gamesWithGoals++;
+                        // Assume home team scored first if they won or drew with goals
+                        // This is an approximation since we don't have goal times
+                        if (homeScore > 0) {
+                            if (awayScore === 0 || homeScore > awayScore) {
+                                stats.firstToScoreHome++;
+                            } else if (awayScore > 0) {
+                                // Could be either team, split credit
+                                if (match.result === 'A') {
+                                    stats.firstToScoreAway++;
+                                } else {
+                                    stats.firstToScoreHome++;
+                                }
+                            }
+                        } else if (awayScore > 0) {
+                            stats.firstToScoreAway++;
+                        }
+                    }
+                } else {
+                    // Current home team was away in H2H match
+                    if (awayScore > homeScore) stats.homeWins++;
+                    else if (awayScore < homeScore) stats.awayWins++;
+                    else stats.draws++;
+
+                    // First to score
+                    if (homeScore > 0 || awayScore > 0) {
+                        stats.gamesWithGoals++;
+                        if (awayScore > 0) {
+                            if (homeScore === 0 || awayScore > homeScore) {
+                                stats.firstToScoreHome++;
+                            } else if (homeScore > 0) {
+                                if (match.result === 'H') {
+                                    stats.firstToScoreAway++;
+                                } else {
+                                    stats.firstToScoreHome++;
+                                }
+                            }
+                        } else if (homeScore > 0) {
+                            stats.firstToScoreAway++;
+                        }
+                    }
+                }
+            });
+
+            stats.avgGoals = stats.total > 0 ? stats.totalGoals / stats.total : null;
+
+            return stats;
+        }
+
+        function renderMomentumChart(matchId, match) {
+            const ctx = document.getElementById(`momentumChart-${matchId}`);
+            if (!ctx) return;
+
+            const graphData = match.momentumGraph;
+            const points = graphData.graphPoints;
+
+            // Prepare data
+            const labels = points.map(p => p.minute);
+            const values = points.map(p => p.value);
+
+            // Separate home (positive) and away (negative) values
+            const homeValues = values.map(v => v >= 0 ? v : null);
+            const awayValues = values.map(v => v < 0 ? v : null);
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: match.homeTeamShort,
+                            data: homeValues,
+                            backgroundColor: 'rgba(0, 255, 135, 0.8)',
+                            borderColor: 'rgba(0, 255, 135, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            barPercentage: 1.0,
+                            categoryPercentage: 1.0
+                        },
+                        {
+                            label: match.awayTeamShort,
+                            data: awayValues,
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            barPercentage: 1.0,
+                            categoryPercentage: 1.0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: 'rgba(148, 163, 184, 0.7)',
+                                font: {
+                                    size: 10
+                                },
+                                maxTicksLimit: 18,
+                                callback: function(value, index) {
+                                    const minute = this.getLabelForValue(value);
+                                    // Show every 5 minutes
+                                    if (minute % 5 === 0 || minute === '45+' || minute === '90+') {
+                                        return minute + "'";
+                                    }
+                                    return '';
+                                }
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: 'rgba(148, 163, 184, 0.7)',
+                                font: {
+                                    size: 11
+                                },
+                                callback: function(value) {
+                                    return Math.abs(value) + '%';
+                                }
+                            },
+                            min: -100,
+                            max: 100
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: 'rgba(255, 255, 255, 0.9)',
+                                font: {
+                                    size: 12,
+                                    weight: '600'
+                                },
+                                padding: 15,
+                                usePointStyle: true,
+                                pointStyle: 'circle'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(18, 24, 38, 0.95)',
+                            titleColor: 'rgba(255, 255, 255, 0.9)',
+                            bodyColor: 'rgba(255, 255, 255, 0.9)',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: true,
+                            callbacks: {
+                                title: function(context) {
+                                    return `Minute ${context[0].label}'`;
+                                },
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    if (value !== null) {
+                                        return `${context.dataset.label}: ${Math.abs(value)}% pressure`;
+                                    }
+                                    return null;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         function renderPlayer(player, incidents) {

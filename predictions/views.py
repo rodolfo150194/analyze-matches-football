@@ -259,6 +259,9 @@ def matches_list(request):
             'homeLineup': home_lineup,
             'awayLineup': away_lineup,
             'incidents': incidents_data,
+            'momentumGraph': match.momentum_graph if match.momentum_graph else None,
+            'shotmapData': match.shotmap_data if match.shotmap_data else None,
+            'bestPlayers': match.best_players if match.best_players else None,
         }
 
     # Convert teams to JSON-safe dict

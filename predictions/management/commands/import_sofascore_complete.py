@@ -831,6 +831,12 @@ class Command(BaseCommand):
                 except Exception:
                     pass  # Continue if incidents fetch fails
 
+            # Import advanced match data (momentum graph, shotmap, best players)
+            try:
+                await self.import_match_advanced_data(api, match, event_id, force)
+            except Exception:
+                pass  # Continue if advanced data fetch fails
+
             return has_match_stats or has_player_stats
 
         except Exception:
@@ -838,8 +844,53 @@ class Command(BaseCommand):
 
         return False
 
+    async def import_match_advanced_data(self, api, match, event_id, force=False):
+        """Import advanced match data: momentum graph, shotmap, best players"""
+        try:
+            # Only import if force=True OR if match doesn't have this data yet
+            should_import = force or not match.momentum_graph
+
+            if should_import:
+                # Get momentum graph
+                try:
+                    graph_data = await api.get_match_graph(event_id)
+                    if graph_data and 'graphPoints' in graph_data:
+                        await sync_to_async(self._update_match_field)(
+                            match, 'momentum_graph', graph_data
+                        )
+                except Exception:
+                    pass
+
+                # Get shotmap
+                try:
+                    shotmap_data = await api.get_match_shotmap(event_id)
+                    if shotmap_data and 'shotmap' in shotmap_data:
+                        await sync_to_async(self._update_match_field)(
+                            match, 'shotmap_data', shotmap_data
+                        )
+                except Exception:
+                    pass
+
+                # Get best players
+                try:
+                    best_players_data = await api.get_match_best_players(event_id)
+                    if best_players_data:
+                        await sync_to_async(self._update_match_field)(
+                            match, 'best_players', best_players_data
+                        )
+                except Exception:
+                    pass
+
+        except Exception:
+            pass
+
+    def _update_match_field(self, match, field_name, value):
+        """Update a specific field in the match"""
+        setattr(match, field_name, value)
+        match.save(update_fields=[field_name])
+
     def extract_match_statistics(self, statistics):
-        """Extract match statistics"""
+        """Extract match statistics from all periods (ALL, 1ST_HALF, 2ND_HALF)"""
         if not statistics:
             return None
 
@@ -848,12 +899,15 @@ class Command(BaseCommand):
             return None
 
         result = {}
+        period_data = {'ALL': {}, '1ST_HALF': {}, '2ND_HALF': {}}
 
-        for period_data in stats_list:
-            if period_data.get('period') != 'ALL':
+        # Extract data from all periods
+        for period_stats in stats_list:
+            period = period_stats.get('period')
+            if period not in period_data:
                 continue
 
-            groups = period_data.get('groups', [])
+            groups = period_stats.get('groups', [])
             for group in groups:
                 stats_items = group.get('statisticsItems', [])
 
@@ -863,27 +917,79 @@ class Command(BaseCommand):
                     home_val = stat.get('homeValue', stat.get('home'))
                     away_val = stat.get('awayValue', stat.get('away'))
 
-                    if 'Total shots' in name or key == 'totalShotsOnGoal':
-                        result['shots_home'] = safe_int(home_val)
-                        result['shots_away'] = safe_int(away_val)
-                    elif 'Shots on target' in name or key == 'shotsOnTarget':
-                        result['shots_on_target_home'] = safe_int(home_val)
-                        result['shots_on_target_away'] = safe_int(away_val)
-                    elif 'Corner kicks' in name or key == 'cornerKicks':
-                        result['corners_home'] = safe_int(home_val)
-                        result['corners_away'] = safe_int(away_val)
-                    elif 'Yellow cards' in name or key == 'yellowCards':
-                        result['yellow_cards_home'] = safe_int(home_val)
-                        result['yellow_cards_away'] = safe_int(away_val)
-                    elif 'Fouls' in name or key == 'fouls':
-                        result['fouls_home'] = safe_int(home_val)
-                        result['fouls_away'] = safe_int(away_val)
-                    elif 'Ball possession' in name or key == 'ballPossession':
-                        result['possession_home'] = safe_int(home_val)
-                        result['possession_away'] = safe_int(away_val)
-                    elif 'Expected goals' in name or key == 'expectedGoals':
-                        result['xg_home'] = safe_float(home_val)
-                        result['xg_away'] = safe_float(away_val)
+                    # Map stat to field name
+                    field_mapping = {
+                        'shots': ('Total shots', 'totalShotsOnGoal'),
+                        'shots_on_target': ('Shots on target', 'shotsOnTarget'),
+                        'shots_off_target': ('Shots off target', 'shotsOffTarget'),
+                        'shots_blocked': ('Blocked shots', 'shotsBlocked'),
+                        'corners': ('Corner kicks', 'cornerKicks'),
+                        'yellow_cards': ('Yellow cards', 'yellowCards'),
+                        'red_cards': ('Red cards', 'redCards'),
+                        'fouls': ('Fouls', 'fouls'),
+                        'offsides': ('Offsides', 'offsides'),
+                        'possession': ('Ball possession', 'ballPossession'),
+                        'xg': ('Expected goals', 'expectedGoals'),
+                        'hit_woodwork': ('Hit woodwork', 'hitWoodwork'),
+                    }
+
+                    for field, patterns in field_mapping.items():
+                        if any(pattern in name or key == pattern for pattern in patterns if isinstance(pattern, str)):
+                            period_data[period][field] = {
+                                'home': home_val,
+                                'away': away_val
+                            }
+
+        # Priority: Use ALL if available, otherwise sum 1ST_HALF + 2ND_HALF
+        def get_stat_value(field, team):
+            """Get stat value with fallback logic"""
+            # Try ALL first
+            if field in period_data['ALL'] and period_data['ALL'][field][team] is not None:
+                return period_data['ALL'][field][team]
+
+            # Try summing halves
+            first_half = period_data['1ST_HALF'].get(field, {}).get(team)
+            second_half = period_data['2ND_HALF'].get(field, {}).get(team)
+
+            if first_half is not None and second_half is not None:
+                # Sum numeric values
+                try:
+                    return safe_int(first_half) + safe_int(second_half)
+                except (ValueError, TypeError):
+                    pass
+
+            # Return whichever is available
+            return first_half if first_half is not None else second_half
+
+        # Build result with fallback logic
+        stat_fields = [
+            'shots', 'shots_on_target', 'shots_off_target', 'shots_blocked',
+            'corners', 'yellow_cards', 'red_cards', 'fouls', 'offsides', 'possession', 'hit_woodwork'
+        ]
+
+        for field in stat_fields:
+            home_val = get_stat_value(field, 'home')
+            away_val = get_stat_value(field, 'away')
+
+            if home_val is not None:
+                if field == 'possession':
+                    result[f'{field}_home'] = safe_int(home_val)
+                else:
+                    result[f'{field}_home'] = safe_int(home_val)
+
+            if away_val is not None:
+                if field == 'possession':
+                    result[f'{field}_away'] = safe_int(away_val)
+                else:
+                    result[f'{field}_away'] = safe_int(away_val)
+
+        # xG is special - use float
+        xg_home = get_stat_value('xg', 'home')
+        xg_away = get_stat_value('xg', 'away')
+        if xg_home is not None:
+            result['xg_home'] = safe_float(xg_home)
+        if xg_away is not None:
+            result['xg_away'] = safe_float(xg_away)
 
         return result if result else None
 
@@ -1344,8 +1450,17 @@ class Command(BaseCommand):
         player_in = None
         player_out = None
         if mapped_type == 'substitution':
-            # player_out is the main player
-            player_out = player
+            # For substitutions, playerOut and playerIn are separate fields
+            # (not using the main 'player' field)
+
+            # player_out from playerOut field
+            player_out_data = incident_data.get('playerOut', {})
+            if player_out_data:
+                player_out_id = player_out_data.get('id')
+                if player_out_id:
+                    player_out = await sync_to_async(
+                        Player.objects.filter(sofascore_id=player_out_id).first
+                    )()
 
             # player_in from playerIn field
             player_in_data = incident_data.get('playerIn', {})

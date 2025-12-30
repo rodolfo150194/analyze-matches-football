@@ -136,6 +136,50 @@ class SofascoreAPI:
         endpoint = f"/event/{event_id}/form"
         return await self._get(endpoint)
 
+    async def get_match_graph(self, event_id):
+        """
+        Obtener gráfico de momentum/presión del partido minuto a minuto
+
+        Devuelve:
+        - graphPoints: Array de {minute, value} donde:
+          - value > 0: dominio equipo local
+          - value < 0: dominio equipo visitante
+          - value ~ 0: partido equilibrado
+        - periodTime: Duración de cada periodo (ej: 45)
+        - periodCount: Número de periodos (ej: 2)
+        - overtimeLength: Duración tiempo extra
+        """
+        endpoint = f"/event/{event_id}/graph"
+        return await self._get(endpoint)
+
+    async def get_match_shotmap(self, event_id):
+        """
+        Obtener mapa de tiros del partido (posición en el campo)
+        """
+        endpoint = f"/event/{event_id}/shotmap"
+        return await self._get(endpoint)
+
+    async def get_match_highlights(self, event_id):
+        """
+        Obtener highlights/vídeos del partido
+        """
+        endpoint = f"/event/{event_id}/highlights"
+        return await self._get(endpoint)
+
+    async def get_match_best_players(self, event_id):
+        """
+        Obtener mejores jugadores del partido (MVP de cada equipo)
+        """
+        endpoint = f"/event/{event_id}/best-players"
+        return await self._get(endpoint)
+
+    async def get_match_managers(self, event_id):
+        """
+        Obtener información de los entrenadores del partido
+        """
+        endpoint = f"/event/{event_id}/managers"
+        return await self._get(endpoint)
+
         # ============================================
         # MÉTODOS PARA EQUIPOS
         # ============================================

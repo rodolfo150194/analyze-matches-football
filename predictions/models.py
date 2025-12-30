@@ -138,6 +138,22 @@ class Match(models.Model):
     booking_points_home = models.IntegerField(null=True, blank=True)  # 10 = yellow, 25 = red
     booking_points_away = models.IntegerField(null=True, blank=True)
 
+    # Datos avanzados JSON
+    momentum_graph = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Gráfico de momentum minuto a minuto. Format: {graphPoints: [{minute, value}], periodTime, periodCount}'
+    )
+    shotmap_data = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Mapa de tiros del partido (posición en el campo)'
+    )
+    best_players = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Mejores jugadores del partido (MVP de cada equipo)'
+    )
 
     class Meta:
         db_table = 'matches'
