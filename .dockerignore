@@ -40,11 +40,7 @@ db.sqlite3
 .env.*.local
 
 # Static files (will be collected during build)
-staticfiles/
 static/
-
-# Media files
-media/
 
 # ML Models (too large - should be downloaded or mounted)
 *.pkl
