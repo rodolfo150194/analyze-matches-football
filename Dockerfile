@@ -38,9 +38,5 @@ EXPOSE 8000
 
 
 # Run migrations and start gunicorn directly
-CMD exec gunicorn football_django.wsgi:application \
-    --bind 0.0.0.0:8000 \
-    --workers 2 \
-    --threads 4 \
-    --timeout 120
+ENTRYPOINT ["/app/entrypoint.sh"]
 
